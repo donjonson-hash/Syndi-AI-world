@@ -10,23 +10,26 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - uses: actions/checkout@v4
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
       
-      - uses: actions/setup-java@v4
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: '17'
       
-      - uses: subosito/flutter-action@v2
+      - name: 🎯 Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.24.0'
           channel: 'stable'
       
-      # Установка ImageMagick для генерации иконок
       - name: 🛠️ Install ImageMagick
-        run: sudo apt-get update && sudo apt-get install -y imagemagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
       
-      # Генерация иконок приложения
       - name: 🎨 Generate app icons
         run: |
           mkdir -p android/app/src/main/res/mipmap-hdpi
@@ -53,12 +56,12 @@ jobs:
           done
           
           echo "✅ Icons generated:"
-          find android/app/src/main/res/mipmap-* -name "*.png"
+          find android/app/src/main/res/mipmap-* -name "*.png" | head -10
       
       - name: 📦 Get dependencies
         run: flutter pub get
       
-      - name: 🔨 Build APK
+      - name: 🔨 Build Release APK
         run: flutter build apk --release
       
       - name: 📤 Upload APK
