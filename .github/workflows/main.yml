@@ -1,187 +1,40 @@
-name: Build Flutter APK
+name: Build APK
 
 on:
   push:
-    branches: [ main, master, develop ]
-  workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Тип сборки'
-        required: true
-        default: 'debug'
-        type: choice
-        options:
-          - debug
-          - release
-
-env:
-  FLUTTER_VERSION: '3.19.0'
-  JAVA_VERSION: '17'
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
-    name: Build Android APK
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
       - name: Setup Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: '11'
           distribution: 'temurin'
-
+      
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: 'latest'
           channel: 'stable'
-          cache: true
-
-      - name: Find and Setup Project
-        run: |
-          echo "=== Поиск проекта ==="
-          PROJECT_PATH=$(find . -type d -name "syndi_mobile" | head -1)
-          
-          if [ -n "$PROJECT_PATH" ]; then
-            echo "✅ Проект найден: $PROJECT_PATH"
-            ln -sf "$PROJECT_PATH" ./flutter_project
-          else
-            echo "❌ Проект 'syndi_mobile' не найден"
-            exit 1
-          fi
-          
-          cd ./flutter_project
-          echo "=== Содержимое проекта ==="
-          ls -la
-          
-          # СОЗДАЕМ build.gradle С НУЛЯ (без многострочного EOF)
-          echo "=== СОЗДАЕМ build.gradle ==="
-          
-          echo 'def localProperties = new Properties()' > android/app/build.gradle
-          echo 'def localPropertiesFile = rootProject.file("local.properties")' >> android/app/build.gradle
-          echo 'if (localPropertiesFile.exists()) {' >> android/app/build.gradle
-          echo '    localPropertiesFile.withReader("UTF-8") { reader ->' >> android/app/build.gradle
-          echo '        localProperties.load(reader)' >> android/app/build.gradle
-          echo '    }' >> android/app/build.gradle
-          echo '}' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo 'def flutterRoot = localProperties.getProperty("flutter.sdk")' >> android/app/build.gradle
-          echo 'if (flutterRoot == null) {' >> android/app/build.gradle
-          echo '    throw new GradleException("Flutter SDK not found. Define location with flutter.sdk in the local.properties file.")' >> android/app/build.gradle
-          echo '}' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo 'def flutterVersionCode = localProperties.getProperty("flutter.versionCode")' >> android/app/build.gradle
-          echo 'if (flutterVersionCode == null) {' >> android/app/build.gradle
-          echo '    flutterVersionCode = "1"' >> android/app/build.gradle
-          echo '}' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo 'def flutterVersionName = localProperties.getProperty("flutter.versionName")' >> android/app/build.gradle
-          echo 'if (flutterVersionName == null) {' >> android/app/build.gradle
-          echo '    flutterVersionName = "1.0"' >> android/app/build.gradle
-          echo '}' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo 'apply plugin: "com.android.application"' >> android/app/build.gradle
-          echo 'apply plugin: "kotlin-android"' >> android/app/build.gradle
-          echo 'apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo 'android {' >> android/app/build.gradle
-          echo '    compileSdkVersion 34' >> android/app/build.gradle
-          echo '    ndkVersion flutter.ndkVersion' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo '    compileOptions {' >> android/app/build.gradle
-          echo '        sourceCompatibility JavaVersion.VERSION_1_8' >> android/app/build.gradle
-          echo '        targetCompatibility JavaVersion.VERSION_1_8' >> android/app/build.gradle
-          echo '    }' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo '    kotlinOptions {' >> android/app/build.gradle
-          echo '        jvmTarget = "1.8"' >> android/app/build.gradle
-          echo '    }' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo '    sourceSets {' >> android/app/build.gradle
-          echo '        main.java.srcDirs += "src/main/kotlin"' >> android/app/build.gradle
-          echo '    }' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo '    defaultConfig {' >> android/app/build.gradle
-          echo '        applicationId "com.syndi.mobile"' >> android/app/build.gradle
-          echo '        minSdkVersion 21' >> android/app/build.gradle
-          echo '        targetSdkVersion 34' >> android/app/build.gradle
-          echo '        versionCode flutterVersionCode.toInteger()' >> android/app/build.gradle
-          echo '        versionName flutterVersionName' >> android/app/build.gradle
-          echo '        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"' >> android/app/build.gradle
-          echo '    }' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo '    buildTypes {' >> android/app/build.gradle
-          echo '        release {' >> android/app/build.gradle
-          echo '            signingConfig signingConfigs.debug' >> android/app/build.gradle
-          echo '            minifyEnabled false' >> android/app/build.gradle
-          echo '            shrinkResources false' >> android/app/build.gradle
-          echo '            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"' >> android/app/build.gradle
-          echo '        }' >> android/app/build.gradle
-          echo '        debug {' >> android/app/build.gradle
-          echo '            signingConfig signingConfigs.debug' >> android/app/build.gradle
-          echo '            minifyEnabled false' >> android/app/build.gradle
-          echo '            shrinkResources false' >> android/app/build.gradle
-          echo '        }' >> android/app/build.gradle
-          echo '    }' >> android/app/build.gradle
-          echo '}' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo 'flutter {' >> android/app/build.gradle
-          echo '    source "../.."' >> android/app/build.gradle
-          echo '}' >> android/app/build.gradle
-          echo '' >> android/app/build.gradle
-          echo 'dependencies {' >> android/app/build.gradle
-          echo '    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"' >> android/app/build.gradle
-          echo '    implementation "androidx.core:core-ktx:1.12.0"' >> android/app/build.gradle
-          echo '    implementation "androidx.appcompat:appcompat:1.6.1"' >> android/app/build.gradle
-          echo '    implementation "com.google.android.material:material:1.11.0"' >> android/app/build.gradle
-          echo '    testImplementation "junit:junit:4.13.2"' >> android/app/build.gradle
-          echo '    androidTestImplementation "androidx.test:runner:1.5.2"' >> android/app/build.gradle
-          echo '    androidTestImplementation "androidx.test.espresso:espresso-core:3.5.1"' >> android/app/build.gradle
-          echo '}' >> android/app/build.gradle
-          
-          echo "✅ build.gradle создан с отключенным shrinkResources"
-          
-          # Создаем gradle.properties
-          echo "org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=512m" > android/gradle.properties
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
-          
-          echo "✅ gradle.properties создан"
-          
-          # Создаем gradlew если его нет
-          if [ ! -f "android/gradlew" ]; then
-            echo "⚠️ gradlew не найден, создаем..."
-            cd android
-            gradle wrapper
-            cd ..
-          fi
-          chmod +x android/gradlew
-          echo "✅ gradlew готов"
-
-      - name: Get Dependencies
-        working-directory: ./flutter_project
-        run: |
-          flutter clean
-          flutter pub get
-
+      
+      - name: Get Flutter dependencies
+        run: flutter pub get
+      
       - name: Build APK
-        working-directory: ./flutter_project
-        run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
-          echo "🚀 Сборка типа: $BUILD_TYPE"
-          
-          if [ "$BUILD_TYPE" == "debug" ]; then
-            flutter build apk --debug
-          else
-            flutter build apk --release --split-per-abi
-          fi
-
-      - name: Upload APK
-        if: success()
-        uses: actions/upload-artifact@v4
+        run: flutter build apk --release --split-per-abi
+      
+      - name: Upload APK artifacts
+        uses: actions/upload-artifact@v3
         with:
-          name: syndi-apk-${{ github.event.inputs.build_type || 'debug' }}
-          path: ./flutter_project/build/app/outputs/flutter-apk/*.apk
+          name: flutter-apk
+          path: build/app/outputs/flutter-apk/
+          retention-days: 30
