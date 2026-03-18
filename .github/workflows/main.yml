@@ -60,7 +60,7 @@ jobs:
           # ПОЛНОСТЬЮ ПЕРЕСОЗДАЕМ build.gradle
           echo "=== ПЕРЕСОЗДАЕМ build.gradle ==="
           
-          cat > android/app/build.gradle << 'EOF'
+          cat > android/app/build.gradle << 'GRADLE_EOF'
 def localProperties = new Properties()
 def localPropertiesFile = rootProject.file('local.properties')
 if (localPropertiesFile.exists()) {
@@ -143,16 +143,16 @@ dependencies {
     androidTestImplementation 'androidx.test:runner:1.5.2'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
-EOF
+GRADLE_EOF
           
           echo "✅ build.gradle пересоздан с отключенным shrinkResources"
           
           # Создаем gradle.properties
-          cat > android/gradle.properties << 'EOF'
+          cat > android/gradle.properties << 'PROPS_EOF'
 org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=512m
 android.useAndroidX=true
 android.enableJetifier=true
-EOF
+PROPS_EOF
           
           echo "✅ gradle.properties создан"
           
