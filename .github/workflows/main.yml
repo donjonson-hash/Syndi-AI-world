@@ -31,52 +31,108 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Fix Project Structure
+      - name: Find Project
+        id: find
         run: |
-          # Создаем symlink без кириллицы для надежности
-          ln -s "Рабочий стол/Syndi-AIworld/syndi_mobile" ./syndi_mobile_fixed
-          echo "PROJECT_PATH=./syndi_mobile_fixed" >> $GITHUB_ENV
-          echo "✅ Создан symlink: ./syndi_mobile_fixed"
-
-      - name: Fix Android Config
-        run: |
-          cd $PROJECT_PATH
+          echo "=== ИЩЕМ ПРОЕКТ ==="
+          find . -name "pubspec.yaml" -type f 2>/dev/null | head -5
           
-          # AndroidX
+          PROJECT_PATH=$(find . -name "pubspec.yaml" -type f -not -path "*/.*" | head -1 | xargs dirname)
+          echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_OUTPUT
+          echo "✅ Найден проект: $PROJECT_PATH"
+          
+          ls -la "$PROJECT_PATH"
+
+      - name: Check Flutter Environment
+        run: |
+          echo "=== FLUTTER DOCTOR ==="
+          flutter doctor -v
+          
+          echo "=== JAVA VERSION ==="
+          java -version
+
+      - name: Fix Android Configuration
+        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
+        run: |
+          echo "=== ИСПРАВЛЯЕМ КОНФИГУРАЦИЮ ==="
+          
+          # Проверяем текущие файлы
+          echo "--- gradle.properties ---"
+          cat android/gradle.properties
+          
+          echo "--- app/build.gradle (релевантные строки) ---"
+          grep -n "minifyEnabled\|shrinkResources\|proguardFiles" android/app/build.gradle || echo "Не найдено"
+          
+          # Добавляем AndroidX
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
+          echo "✅ AndroidX добавлен"
           
-          # Build.gradle
-          sed -i 's/shrinkResources false/shrinkResources true/g' android/app/build.gradle
-          sed -i 's/minifyEnabled false/minifyEnabled true/g' android/app/build.gradle
-          
-          # ProGuard
-          echo "-keep class io.flutter.** { *; }" > android/app/proguard-rules.pro
+          # Исправляем build.gradle
+          sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
+          sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
+          echo "✅ Build.gradle исправлен (отключен shrinkResources для отладки)"
 
-      - name: Build APK
+      - name: Get Dependencies
+        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
         run: |
-          cd $PROJECT_PATH
+          echo "=== PUB GET ==="
           flutter clean
           flutter pub get
-          flutter build apk --release --no-tree-shake-icons
 
-      - name: Find and Upload APK
+      - name: Build APK with Logs
+        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
         run: |
-          # Ищем APK в разных местах
-          APK_PATH=$(find $PROJECT_PATH -name "app-release.apk" -type f 2>/dev/null | head -1)
+          echo "=== НАЧИНАЕМ СБОРКУ ==="
+          flutter build apk --release --verbose 2>&1 | tee build.log
+        continue-on-error: true
+
+      - name: Analyze Build Errors
+        if: always()
+        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
+        run: |
+          echo "=========================================="
+          echo "=== АНАЛИЗ ОШИБОК СБОРКИ ==="
+          echo "=========================================="
           
-          if [ -z "$APK_PATH" ]; then
-            echo "❌ APK не найден, ищем все APK:"
-            find $PROJECT_PATH -name "*.apk" -type f 2>/dev/null
-            ls -la $PROJECT_PATH/build/app/outputs/ 2>/dev/null || true
-            exit 1
+          if [ -f build.log ]; then
+            echo ""
+            echo "=== ПОСЛЕДНИЕ 50 СТРОК ==="
+            tail -50 build.log
+            
+            echo ""
+            echo "=== ОШИБКИ DART/FLUTTER ==="
+            grep -n "Error:" build.log | head -10 || echo "Ошибок Dart не найдено"
+            
+            echo ""
+            echo "=== ОШИБКИ GRADLE ==="
+            grep -n -A 3 "FAILURE:\|What went wrong:\|Execution failed" build.log | head -30 || echo "Ошибок Gradle не найдено"
+            
+            echo ""
+            echo "=== ПРЕДУПРЕЖДЕНИЯ ==="
+            grep -n "warning:" build.log | head -10 || echo "Предупреждений нет"
+          else
+            echo "❌ Файл build.log не создан"
           fi
           
-          echo "✅ APK найден: $APK_PATH"
-          echo "APK_PATH=$APK_PATH" >> $GITHUB_ENV
+          echo ""
+          echo "=== ПРОВЕРКА APK ==="
+          find . -name "*.apk" -type f 2>/dev/null || echo "APK не найдены"
+          
+          echo ""
+          echo "=== СТРУКТУРА OUTPUTS ==="
+          ls -la build/app/outputs/ 2>/dev/null || echo "Папка outputs не создана"
 
-      - name: Upload APK
+      - name: Upload APK if Success
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: ${{ env.APK_PATH }}
+          path: ${{ steps.find.outputs.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload Build Log if Failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: ${{ steps.find.outputs.PROJECT_PATH }}/build.log
