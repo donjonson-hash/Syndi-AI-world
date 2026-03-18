@@ -8,7 +8,6 @@ on:
 env:
   FLUTTER_VERSION: '3.19.0'
   JAVA_VERSION: '17'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-android:
@@ -32,111 +31,63 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Find Flutter Project
-        id: find_project
+      - name: Find Project
         run: |
           echo "=== ИЩЕМ ПРОЕКТ ==="
-          pwd
-          ls -la
-          
-          # Ищем папку с pubspec.yaml
           PROJECT_PATH=$(find . -name "pubspec.yaml" -type f -exec dirname {} \; | head -1)
-          
-          if [ -n "$PROJECT_PATH" ]; then
-            echo "✅ Найден проект: $PROJECT_PATH"
-            echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_ENV
-          else
-            echo "❌ Проект не найден!"
-            exit 1
-          fi
-          
-          # Показываем содержимое с правильными кавычками
-          echo "=== СОДЕРЖИМОЕ ПРОЕКТА ==="
-          ls -la "$PROJECT_PATH"
+          echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_ENV
+          echo "✅ Найден: $PROJECT_PATH"
 
-      - name: Check Flutter Environment
-        working-directory: ${{ env.PROJECT_PATH }}
+      - name: Fix Android Build Config
         run: |
-          echo "=== FLUTTER DOCTOR ==="
-          flutter doctor -v
-
-      - name: Fix Gradle Configuration
-        working-directory: ${{ env.PROJECT_PATH }}
-        run: |
-          echo "=== ИСПРАВЛЯЕМ GRADLE КОНФИГУРАЦИЮ ==="
+          cd "$PROJECT_PATH"
+          echo "=== ИСПРАВЛЯЕМ BUILD.GRADLE ==="
           
-          # Создаем gradle.properties
-          mkdir -p android
-          cat > android/gradle.properties << 'EOF'
-          org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=512m
-          android.useAndroidX=true
-          android.enableJetifier=true
-          EOF
-          echo "✅ gradle.properties создан"
+          # Показываем текущее состояние
+          echo "--- До исправления ---"
+          grep -n "shrinkResources\|minifyEnabled" android/app/build.gradle || echo "Не найдено"
           
-          # Исправляем build.gradle если есть проблема с shrinkResources
-          if [ -f "android/app/build.gradle" ]; then
-            echo "✅ Найден android/app/build.gradle"
-            
-            # Отключаем shrinkResources
-            sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
-            sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
-            
-            echo "✅ build.gradle исправлен (shrinkResources отключен)"
+          # ВАЖНО: Отключаем shrinkResources и minifyEnabled для стабильности
+          sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
+          sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
+          sed -i 's/shrinkResources false/shrinkResources false/g' android/app/build.gradle
+          sed -i 's/minifyEnabled false/minifyEnabled false/g' android/app/build.gradle
+          
+          echo "--- После исправления ---"
+          grep -n "shrinkResources\|minifyEnabled" android/app/build.gradle || echo "Не найдено"
+          
+          # AndroidX
+          if [ -f "android/gradle.properties" ]; then
+            echo "android.useAndroidX=true" >> android/gradle.properties
+            echo "android.enableJetifier=true" >> android/gradle.properties
           fi
           
           # Права на gradlew
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-            echo "✅ gradlew permissions fixed"
-          fi
+          chmod +x android/gradlew
 
       - name: Get Dependencies
-        working-directory: ${{ env.PROJECT_PATH }}
         run: |
+          cd "$PROJECT_PATH"
           flutter clean
           flutter pub get
 
       - name: Build Debug APK
-        working-directory: ${{ env.PROJECT_PATH }}
         run: |
-          flutter build apk --debug
-          
+          cd "$PROJECT_PATH"
+          flutter build apk --debug --verbose 2>&1 | tee build.log
+        continue-on-error: true
+
+      - name: Show Errors
+        if: always()
+        run: |
+          cd "$PROJECT_PATH"
+          echo "=== ОШИБКИ ==="
+          tail -50 build.log
+          grep -i "error\|failure\|what went wrong" build.log | head -10 || true
+
       - name: Upload Debug APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: debug-apk
           path: ${{ env.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: warn
-
-      - name: Build Release APK
-        working-directory: ${{ env.PROJECT_PATH }}
-        run: |
-          flutter build apk --release --split-per-abi
-        continue-on-error: true
-
-      - name: Upload Release APKs
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-apks
-          path: |
-            ${{ env.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-*-release.apk
-          if-no-files-found: warn
-
-      - name: Save Build Info
-        if: always()
-        working-directory: ${{ env.PROJECT_PATH }}
-        run: |
-          echo "=== ИНФОРМАЦИЯ О СБОРКЕ ===" > build-info.txt
-          echo "Дата: $(date)" >> build-info.txt
-          echo "Flutter: $(flutter --version)" >> build-info.txt
-          echo "APK:" >> build-info.txt
-          find . -name "*.apk" -type f >> build-info.txt
-          
-      - name: Upload Build Info
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-info
-          path: ${{ env.PROJECT_PATH }}/build-info.txt
