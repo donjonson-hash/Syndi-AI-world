@@ -38,86 +38,62 @@ jobs:
         run: |
           echo "PROJECT_PATH=./Рабочий стол/Syndi-AIworld/syndi_mobile" >> $GITHUB_OUTPUT
 
-      - name: Fix Android Build Config
+      - name: Fix AndroidX and Gradle
         run: |
           PROJECT_PATH="${{ steps.locate.outputs.PROJECT_PATH }}"
+          
+          # Fix gradle.properties - AndroidX
+          GRADLE_PROPS="$PROJECT_PATH/android/gradle.properties"
+          echo "android.useAndroidX=true" >> "$GRADLE_PROPS"
+          echo "android.enableJetifier=true" >> "$GRADLE_PROPS"
+          echo "✅ AndroidX enabled"
+          
+          # Fix build.gradle - shrinkResources
           BUILD_GRADLE="$PROJECT_PATH/android/app/build.gradle"
-          echo "Fixing $BUILD_GRADLE"
-          cp "$BUILD_GRADLE" "$BUILD_GRADLE.backup"
           sed -i 's/shrinkResources false/shrinkResources true/g' "$BUILD_GRADLE"
           sed -i 's/minifyEnabled false/minifyEnabled true/g' "$BUILD_GRADLE"
+          echo "✅ Build config fixed"
+          
+          # Fix AndroidManifest.xml for AndroidX
+          MANIFEST="$PROJECT_PATH/android/app/src/main/AndroidManifest.xml"
+          if ! grep -q "android:usesCleartextTraffic" "$MANIFEST"; then
+            sed -i 's/<application/<application android:usesCleartextTraffic="true"/' "$MANIFEST"
+          fi
 
       - name: Create ProGuard Rules
         run: |
           PROJECT_PATH="${{ steps.locate.outputs.PROJECT_PATH }}"
           PROGUARD_FILE="$PROJECT_PATH/android/app/proguard-rules.pro"
           if [ ! -f "$PROGUARD_FILE" ]; then
-            echo "# ProGuard Rules for Flutter" > "$PROGUARD_FILE"
-            echo "-keep class io.flutter.app.** { *; }" >> "$PROGUARD_FILE"
-            echo "-keep class io.flutter.plugin.** { *; }" >> "$PROGUARD_FILE"
-            echo "-keep class io.flutter.util.** { *; }" >> "$PROGUARD_FILE"
-            echo "-keep class io.flutter.view.** { *; }" >> "$PROGUARD_FILE"
+            echo "# Flutter" > "$PROGUARD_FILE"
             echo "-keep class io.flutter.** { *; }" >> "$PROGUARD_FILE"
             echo "-keep class io.flutter.plugins.** { *; }" >> "$PROGUARD_FILE"
-            echo "Created proguard-rules.pro"
+            echo "-keepattributes *Annotation*" >> "$PROGUARD_FILE"
           fi
 
-      - name: Fix Chat Screen Imports
-        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
-        run: |
-          CHAT_FILE="lib/screens/chat/chat_screen.dart"
-          if [ -f "$CHAT_FILE" ]; then
-            # Добавляем riverpod импорт в начало
-            if ! grep -q "flutter_riverpod" "$CHAT_FILE"; then
-              sed -i '1i import '\''package:flutter_riverpod/flutter_riverpod.dart'\'';' "$CHAT_FILE"
-            fi
-            echo "Fixed imports in chat_screen.dart"
-          fi
-
-      - name: Clean and Build
+      - name: Clean and Get Dependencies
         working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
         run: |
           flutter clean
           flutter pub get
-          flutter build apk --release
 
-      - name: Show Build Errors
-        if: failure()
+      - name: Build APK
+        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
         run: |
-          find . -name "*.log" -exec cat {} \; 2>/dev/null || true
-          flutter build apk --release --verbose 2>&1 | tail -100    
+          flutter build apk --release --no-tree-shake-icons 2>&1 | tee build.log
+        continue-on-error: true
+
+      - name: Show Errors if Failed
+        if: failure()
+        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
+        run: |
+          echo "=== BUILD ERRORS ==="
+          cat build.log | grep -A 10 "Error:" || true
+          cat build.log | tail -100
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
           path: ${{ steps.locate.outputs.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Build Release APK
-        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
-        run: |
-          flutter build apk --release --verbose 2>&1 | tee build.log
-        continue-on-error: true
-
-      - name: Show Detailed Errors
-        if: failure()
-        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
-        run: |
-          echo "=== BUILD LOG ==="
-          cat build.log 2>/dev/null | tail -200 || true
-          
-          echo ""
-          echo "=== DART ERRORS ==="
-          cat build.log 2>/dev/null | grep -A 5 "Error:" || true
-          
-          echo ""
-          echo "=== CHAT_SCREEN ERRORS ==="
-          cat build.log 2>/dev/null | grep -A 3 "chat_screen" || true
-
-
-
-
-
-
-
-
