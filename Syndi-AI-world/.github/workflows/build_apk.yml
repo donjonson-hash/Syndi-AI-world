@@ -22,19 +22,19 @@ jobs:
           flutter-version: '3.24.0'
           channel: 'stable'
       
-      # Генерируем иконки приложения
+      # Установка ImageMagick для генерации иконок
+      - name: 🛠️ Install ImageMagick
+        run: sudo apt-get update && sudo apt-get install -y imagemagick
+      
+      # Генерация иконок приложения
       - name: 🎨 Generate app icons
         run: |
-          sudo apt-get update && sudo apt-get install -y imagemagick
-          
-          # Создаём директории для иконок
           mkdir -p android/app/src/main/res/mipmap-hdpi
           mkdir -p android/app/src/main/res/mipmap-mdpi
           mkdir -p android/app/src/main/res/mipmap-xhdpi
           mkdir -p android/app/src/main/res/mipmap-xxhdpi
           mkdir -p android/app/src/main/res/mipmap-xxxhdpi
           
-          # Генерируем иконки разных размеров (синий круг с буквой S)
           for size in 48 72 96 144 192; do
             case $size in
               48) dir="mipmap-mdpi" ;;
@@ -52,7 +52,8 @@ jobs:
                android/app/src/main/res/$dir/ic_launcher_round.png
           done
           
-          echo "✅ Icons generated"
+          echo "✅ Icons generated:"
+          find android/app/src/main/res/mipmap-* -name "*.png"
       
       - name: 📦 Get dependencies
         run: flutter pub get
