@@ -8,6 +8,7 @@ on:
 env:
   FLUTTER_VERSION: '3.19.0'
   JAVA_VERSION: '17'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # Убирает предупреждение
 
 jobs:
   build-android:
@@ -31,83 +32,103 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Fix Project Path
+      - name: Find Flutter Project
         run: |
           echo "=== ИЩЕМ ПРОЕКТ ==="
-          find . -name "pubspec.yaml" -type f 2>/dev/null | head -5
+          pwd
+          ls -la
           
-          # Создаем symlink без кириллицы
-          ln -s "Рабочий стол/Syndi-AIworld/syndi_mobile" ./project
-          echo "✅ Создан symlink: ./project -> Рабочий стол/Syndi-AIworld/syndi_mobile"
+          # Ищем папку с pubspec.yaml
+          PROJECT_PATH=$(find . -name "pubspec.yaml" -type f -exec dirname {} \; | head -1)
           
-          ls -la ./project
+          if [ -n "$PROJECT_PATH" ]; then
+            echo "✅ Найден проект: $PROJECT_PATH"
+            echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_ENV
+          else
+            echo "❌ Проект не найден!"
+            exit 1
+          fi
+          
+          # Показываем содержимое
+          echo "=== СОДЕРЖИМОЕ ПРОЕКТА ==="
+          ls -la $PROJECT_PATH
 
       - name: Check Flutter Environment
+        working-directory: ${{ env.PROJECT_PATH }}
         run: |
           echo "=== FLUTTER DOCTOR ==="
           flutter doctor -v
 
       - name: Fix Android Configuration
-        working-directory: ./project
+        working-directory: ${{ env.PROJECT_PATH }}
         run: |
           echo "=== ИСПРАВЛЯЕМ КОНФИГУРАЦИЮ ==="
           
           # AndroidX
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
-          echo "✅ AndroidX добавлен"
+          if [ -f "android/gradle.properties" ]; then
+            echo "android.useAndroidX=true" >> android/gradle.properties
+            echo "android.enableJetifier=true" >> android/gradle.properties
+            echo "✅ AndroidX добавлен"
+          else
+            echo "⚠️ android/gradle.properties не найден"
+          fi
           
           # Отключаем shrinkResources для стабильности
-          sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
-          sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
-          echo "✅ Build.gradle исправлен"
+          if [ -f "android/app/build.gradle" ]; then
+            sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
+            sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
+            echo "✅ Build.gradle исправлен"
+          fi
+          
+          # Права на gradlew
+          chmod +x android/gradlew 2>/dev/null || echo "⚠️ gradlew не найден"
 
       - name: Get Dependencies
-        working-directory: ./project
+        working-directory: ${{ env.PROJECT_PATH }}
         run: |
           flutter clean
           flutter pub get
 
-      - name: Build APK with Logs
-        working-directory: ./project
+      - name: Build Debug APK
+        working-directory: ${{ env.PROJECT_PATH }}
         run: |
-          flutter build apk --release --verbose 2>&1 | tee build.log
+          flutter build apk --debug
+          
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: ${{ env.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: warn
+
+      - name: Build Release APK
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: |
+          flutter build apk --release --split-per-abi
         continue-on-error: true
 
-      - name: Analyze Build Errors
-        if: always()
-        working-directory: ./project
-        run: |
-          echo "=========================================="
-          echo "=== АНАЛИЗ ОШИБОК ==="
-          echo "=========================================="
-          
-          if [ -f build.log ]; then
-            echo "=== ПОСЛЕДНИЕ 100 СТРОК ==="
-            tail -100 build.log
-            
-            echo ""
-            echo "=== ОШИБКИ ==="
-            grep -n "Error:" build.log | head -10 || echo "Ошибок Dart не найдено"
-            grep -n -A 3 "FAILURE:" build.log | head -20 || echo "Ошибок Gradle не найдено"
-          else
-            echo "❌ build.log не создан"
-          fi
-          
-          echo ""
-          echo "=== ПОИСК APK ==="
-          find . -name "*.apk" -type f 2>/dev/null || echo "APK не найдены"
-
-      - name: Upload APK if Success
+      - name: Upload Release APKs
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: ./project/build/app/outputs/flutter-apk/app-release.apk
+          name: release-apks
+          path: |
+            ${{ env.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-*-release.apk
+          if-no-files-found: warn
 
-      - name: Upload Build Log if Failed
-        if: failure()
+      - name: Save Build Info
+        if: always()
+        working-directory: ${{ env.PROJECT_PATH }}
+        run: |
+          echo "=== ИНФОРМАЦИЯ О СБОРКЕ ===" > build-info.txt
+          echo "Дата: $(date)" >> build-info.txt
+          echo "Flutter: $(flutter --version)" >> build-info.txt
+          echo "APK:" >> build-info.txt
+          find . -name "*.apk" -type f >> build-info.txt
+          
+      - name: Upload Build Info
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs
-          path: ./project/build.log
+          name: build-info
+          path: ${{ env.PROJECT_PATH }}/build-info.txt
