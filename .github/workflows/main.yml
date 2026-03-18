@@ -8,7 +8,7 @@ on:
 env:
   FLUTTER_VERSION: '3.19.0'
   JAVA_VERSION: '17'
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # Убирает предупреждение
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-android:
@@ -33,6 +33,7 @@ jobs:
           cache: true
 
       - name: Find Flutter Project
+        id: find_project
         run: |
           echo "=== ИЩЕМ ПРОЕКТ ==="
           pwd
@@ -49,9 +50,9 @@ jobs:
             exit 1
           fi
           
-          # Показываем содержимое
+          # Показываем содержимое с правильными кавычками
           echo "=== СОДЕРЖИМОЕ ПРОЕКТА ==="
-          ls -la $PROJECT_PATH
+          ls -la "$PROJECT_PATH"
 
       - name: Check Flutter Environment
         working-directory: ${{ env.PROJECT_PATH }}
@@ -73,15 +74,11 @@ jobs:
             echo "⚠️ android/gradle.properties не найден"
           fi
           
-          # Отключаем shrinkResources для стабильности
-          if [ -f "android/app/build.gradle" ]; then
-            sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
-            sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
-            echo "✅ Build.gradle исправлен"
-          fi
-          
           # Права на gradlew
-          chmod +x android/gradlew 2>/dev/null || echo "⚠️ gradlew не найден"
+          if [ -f "android/gradlew" ]; then
+            chmod +x android/gradlew
+            echo "✅ gradlew permissions fixed"
+          fi
 
       - name: Get Dependencies
         working-directory: ${{ env.PROJECT_PATH }}
