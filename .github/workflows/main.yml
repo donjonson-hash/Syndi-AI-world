@@ -92,3 +92,32 @@ jobs:
         with:
           name: release-apk
           path: ${{ steps.locate.outputs.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Build Release APK
+        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
+        run: |
+          flutter build apk --release --verbose 2>&1 | tee build.log
+        continue-on-error: true
+
+      - name: Show Detailed Errors
+        if: failure()
+        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
+        run: |
+          echo "=== BUILD LOG ==="
+          cat build.log 2>/dev/null | tail -200 || true
+          
+          echo ""
+          echo "=== DART ERRORS ==="
+          cat build.log 2>/dev/null | grep -A 5 "Error:" || true
+          
+          echo ""
+          echo "=== CHAT_SCREEN ERRORS ==="
+          cat build.log 2>/dev/null | grep -A 3 "chat_screen" || true
+
+
+
+
+
+
+
+
