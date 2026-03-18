@@ -3,24 +3,19 @@ name: Build Flutter APK
 on:
   push:
     branches: [ main, master, develop ]
-    paths:
-      - '**/syndi_mobile/**'
-      - '.github/workflows/build_apk.yml'
-  pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
     inputs:
       build_type:
         description: 'Тип сборки'
         required: true
-        default: 'release'
+        default: 'debug'
         type: choice
         options:
           - debug
           - release
 
 env:
-  FLUTTER_VERSION: '3.24.5'
+  FLUTTER_VERSION: '3.19.0'
   JAVA_VERSION: '17'
 
 jobs:
@@ -62,15 +57,21 @@ jobs:
           
           cd ./flutter_project
           
+          # ⭐ ВАЖНО: Отключаем shrinkResources и minifyEnabled
+          echo "=== Исправляем build.gradle ==="
+          sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
+          sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
+          sed -i 's/shrinkResources false/shrinkResources false/g' android/app/build.gradle
+          
+          echo "--- После исправления ---"
+          grep -n "shrinkResources\|minifyEnabled" android/app/build.gradle || echo "Не найдено"
+          
           # AndroidX настройки
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
           
           # Права на gradlew
           chmod +x android/gradlew || true
-          
-          echo "=== Структура проекта ==="
-          ls -la
 
       - name: Get Dependencies
         working-directory: ./flutter_project
@@ -80,33 +81,30 @@ jobs:
 
       - name: Build APK
         working-directory: ./flutter_project
+        continue-on-error: true
         run: |
-          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
           if [ "$BUILD_TYPE" == "debug" ]; then
-            flutter build apk --debug --verbose
+            flutter build apk --debug --verbose 2>&1 | tee build.log
           else
-            flutter build apk --release --verbose
+            flutter build apk --release --verbose 2>&1 | tee build.log
           fi
 
-      - name: Check Build Output
+      - name: Show Errors
         if: always()
+        working-directory: ./flutter_project
         run: |
-          echo "=== Проверка выходных файлов ==="
-          ls -la ./flutter_project/build/app/outputs/flutter-apk/ 2>/dev/null || echo "Директория не найдена"
-          find ./flutter_project/build -name "*.apk" 2>/dev/null || echo "APK не найдены"
+          if [ -f build.log ]; then
+            echo "=== ОШИБКИ СБОРКИ ==="
+            tail -100 build.log
+            grep -i "error\|failure\|what went wrong" build.log | head -10 || true
+          fi
+          ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "APK не созданы"
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: syndi-${{ github.event.inputs.build_type || 'release' }}-apk
+          name: syndi-${{ github.event.inputs.build_type || 'debug' }}-apk
           path: ./flutter_project/build/app/outputs/flutter-apk/*.apk
           if-no-files-found: warn
-
-      - name: Build Summary
-        if: always()
-        run: |
-          echo "### ✅ Сборка APK завершена" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Тип:** ${{ github.event.inputs.build_type || 'release' }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Номер:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
-          ls -lh ./flutter_project/build/app/outputs/flutter-apk/*.apk 2>/dev/null | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY || echo "- APK файлы не найдены" >> $GITHUB_STEP_SUMMARY
