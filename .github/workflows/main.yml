@@ -81,6 +81,12 @@ jobs:
           flutter pub get
           flutter build apk --release
 
+      - name: Show Build Errors
+        if: failure()
+        run: |
+          find . -name "*.log" -exec cat {} \; 2>/dev/null || true
+          flutter build apk --release --verbose 2>&1 | tail -100    
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
