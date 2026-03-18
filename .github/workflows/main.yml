@@ -17,6 +17,7 @@ on:
 env:
   FLUTTER_VERSION: '3.19.0'
   JAVA_VERSION: '17'
+  GRADLE_OPTS: -Dorg.gradle.project.android.enableResourceShrinking=false
 
 jobs:
   build:
@@ -43,38 +44,32 @@ jobs:
       - name: Find and Setup Project
         run: |
           echo "=== Поиск проекта ==="
-          find . -name "pubspec.yaml" -path "*/syndi_mobile/*" -type f
+          PROJECT_PATH=$(find . -type d -name "syndi_mobile" | head -1)
           
-          # Создаем symlink без пробелов
-          PROJECT_PATH=$(find . -name "syndi_mobile" -type d | head -1)
           if [ -n "$PROJECT_PATH" ]; then
+            echo "✅ Проект найден: $PROJECT_PATH"
             ln -sf "$PROJECT_PATH" ./flutter_project
-            echo "✅ Создан symlink: $PROJECT_PATH -> ./flutter_project"
           else
-            echo "❌ Проект не найден"
+            echo "❌ Проект 'syndi_mobile' не найден"
             exit 1
           fi
           
           cd ./flutter_project
+          echo "=== Содержимое проекта ==="
+          ls -la
           
-          # ⭐ ИСПРАВЛЕНИЕ: Отключаем ОБА параметра (shrinkResources зависит от minifyEnabled)
-          echo "=== Исправляем build.gradle ==="
+          # Упрощенное исправление - создаем новый gradle.properties
+          cat > android/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=512m
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
           
-          # Заменяем shrinkResources true → false (КРИТИЧНО!)
-          sed -i 's/shrinkResources\s\+true/shrinkResources false/g' android/app/build.gradle
-          
-          # Заменяем minifyEnabled true → false  
-          sed -i 's/minifyEnabled\s\+true/minifyEnabled false/g' android/app/build.gradle
-          
-          echo "--- После исправления ---"
-          grep -n "shrinkResources\|minifyEnabled" android/app/build.gradle || echo "Не найдено"
-          
-          # AndroidX настройки
-          echo "android.useAndroidX=true" >> android/gradle.properties
-          echo "android.enableJetifier=true" >> android/gradle.properties
+          echo "✅ gradle.properties создан"
           
           # Права на gradlew
           chmod +x android/gradlew || true
+          echo "✅ gradlew permissions fixed"
 
       - name: Get Dependencies
         working-directory: ./flutter_project
@@ -84,30 +79,19 @@ jobs:
 
       - name: Build APK
         working-directory: ./flutter_project
-        continue-on-error: true
         run: |
           BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+          echo "🚀 Сборка типа: $BUILD_TYPE"
+          
           if [ "$BUILD_TYPE" == "debug" ]; then
-            flutter build apk --debug --verbose 2>&1 | tee build.log
+            flutter build apk --debug
           else
-            flutter build apk --release --verbose 2>&1 | tee build.log
+            flutter build apk --release --split-per-abi
           fi
-
-      - name: Show Errors
-        if: always()
-        working-directory: ./flutter_project
-        run: |
-          if [ -f build.log ]; then
-            echo "=== ОШИБКИ СБОРКИ ==="
-            tail -100 build.log
-            grep -i "error\|failure\|what went wrong" build.log | head -10 || true
-          fi
-          ls -la build/app/outputs/flutter-apk/ 2>/dev/null || echo "APK не созданы"
 
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: syndi-${{ github.event.inputs.build_type || 'debug' }}-apk
+          name: syndi-apk-${{ github.event.inputs.build_type || 'debug' }}
           path: ./flutter_project/build/app/outputs/flutter-apk/*.apk
-          if-no-files-found: warn
