@@ -145,7 +145,7 @@ dependencies {
 }
 EOF
           
-          echo "✅ build.gradle пересоздан"
+          echo "✅ build.gradle пересоздан с отключенным shrinkResources"
           
           # Создаем gradle.properties
           cat > android/gradle.properties << 'EOF'
