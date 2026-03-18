@@ -1,0 +1,88 @@
+name: Flutter APK Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  FLUTTER_VERSION: '3.19.0'
+  JAVA_VERSION: '17'
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'temurin'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+          cache: true
+
+      - name: Set Project Path
+        id: locate
+        run: |
+          echo "PROJECT_PATH=./Рабочий стол/Syndi-AIworld/syndi_mobile" >> $GITHUB_OUTPUT
+
+      - name: Fix Android Build Config
+        run: |
+          PROJECT_PATH="${{ steps.locate.outputs.PROJECT_PATH }}"
+          BUILD_GRADLE="$PROJECT_PATH/android/app/build.gradle"
+          echo "Fixing $BUILD_GRADLE"
+          cp "$BUILD_GRADLE" "$BUILD_GRADLE.backup"
+          sed -i 's/shrinkResources false/shrinkResources true/g' "$BUILD_GRADLE"
+          sed -i 's/minifyEnabled false/minifyEnabled true/g' "$BUILD_GRADLE"
+
+      - name: Create ProGuard Rules
+        run: |
+          PROJECT_PATH="${{ steps.locate.outputs.PROJECT_PATH }}"
+          PROGUARD_FILE="$PROJECT_PATH/android/app/proguard-rules.pro"
+          if [ ! -f "$PROGUARD_FILE" ]; then
+            echo "# ProGuard Rules for Flutter" > "$PROGUARD_FILE"
+            echo "-keep class io.flutter.app.** { *; }" >> "$PROGUARD_FILE"
+            echo "-keep class io.flutter.plugin.** { *; }" >> "$PROGUARD_FILE"
+            echo "-keep class io.flutter.util.** { *; }" >> "$PROGUARD_FILE"
+            echo "-keep class io.flutter.view.** { *; }" >> "$PROGUARD_FILE"
+            echo "-keep class io.flutter.** { *; }" >> "$PROGUARD_FILE"
+            echo "-keep class io.flutter.plugins.** { *; }" >> "$PROGUARD_FILE"
+            echo "Created proguard-rules.pro"
+          fi
+
+      - name: Fix Chat Screen Imports
+        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
+        run: |
+          CHAT_FILE="lib/screens/chat/chat_screen.dart"
+          if [ -f "$CHAT_FILE" ]; then
+            # Добавляем riverpod импорт в начало
+            if ! grep -q "flutter_riverpod" "$CHAT_FILE"; then
+              sed -i '1i import '\''package:flutter_riverpod/flutter_riverpod.dart'\'';' "$CHAT_FILE"
+            fi
+            echo "Fixed imports in chat_screen.dart"
+          fi
+
+      - name: Clean and Build
+        working-directory: ${{ steps.locate.outputs.PROJECT_PATH }}
+        run: |
+          flutter clean
+          flutter pub get
+          flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: ${{ steps.locate.outputs.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-release.apk
