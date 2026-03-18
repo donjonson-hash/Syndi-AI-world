@@ -30,16 +30,26 @@ jobs:
           cache: true
       
       - name: Get Flutter dependencies
-        run: |
-          flutter pub get
+        run: flutter pub get
       
-      - name: Build APK
-        run: |
-          flutter build apk --release --split-per-abi
+      - name: Build APK (Debug)
+        run: flutter build apk --debug
       
-      - name: Upload APK artifacts
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: flutter-apk
+          name: syndi-debug-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 30
+      
+      - name: Build APK (Release)
+        run: flutter build apk --release --split-per-abi
+        continue-on-error: true
+      
+      - name: Upload Release APK
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: syndi-release-apk
           path: build/app/outputs/flutter-apk/
           retention-days: 30
