@@ -60,18 +60,29 @@ jobs:
           echo "=== FLUTTER DOCTOR ==="
           flutter doctor -v
 
-      - name: Fix Android Configuration
+      - name: Fix Gradle Configuration
         working-directory: ${{ env.PROJECT_PATH }}
         run: |
-          echo "=== ИСПРАВЛЯЕМ КОНФИГУРАЦИЮ ==="
+          echo "=== ИСПРАВЛЯЕМ GRADLE КОНФИГУРАЦИЮ ==="
           
-          # AndroidX
-          if [ -f "android/gradle.properties" ]; then
-            echo "android.useAndroidX=true" >> android/gradle.properties
-            echo "android.enableJetifier=true" >> android/gradle.properties
-            echo "✅ AndroidX добавлен"
-          else
-            echo "⚠️ android/gradle.properties не найден"
+          # Создаем gradle.properties
+          mkdir -p android
+          cat > android/gradle.properties << 'EOF'
+          org.gradle.jvmargs=-Xmx4G -XX:MaxMetaspaceSize=512m
+          android.useAndroidX=true
+          android.enableJetifier=true
+          EOF
+          echo "✅ gradle.properties создан"
+          
+          # Исправляем build.gradle если есть проблема с shrinkResources
+          if [ -f "android/app/build.gradle" ]; then
+            echo "✅ Найден android/app/build.gradle"
+            
+            # Отключаем shrinkResources
+            sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
+            sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
+            
+            echo "✅ build.gradle исправлен (shrinkResources отключен)"
           fi
           
           # Права на gradlew
