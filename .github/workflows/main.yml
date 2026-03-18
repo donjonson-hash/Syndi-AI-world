@@ -57,11 +57,14 @@ jobs:
           
           cd ./flutter_project
           
-          # ⭐ ВАЖНО: Отключаем shrinkResources и minifyEnabled
+          # ⭐ ИСПРАВЛЕНИЕ: Отключаем ОБА параметра (shrinkResources зависит от minifyEnabled)
           echo "=== Исправляем build.gradle ==="
-          sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
-          sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
-          sed -i 's/shrinkResources false/shrinkResources false/g' android/app/build.gradle
+          
+          # Заменяем shrinkResources true → false (КРИТИЧНО!)
+          sed -i 's/shrinkResources\s\+true/shrinkResources false/g' android/app/build.gradle
+          
+          # Заменяем minifyEnabled true → false  
+          sed -i 's/minifyEnabled\s\+true/minifyEnabled false/g' android/app/build.gradle
           
           echo "--- После исправления ---"
           grep -n "shrinkResources\|minifyEnabled" android/app/build.gradle || echo "Не найдено"
