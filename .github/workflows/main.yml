@@ -31,108 +31,83 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Find Project
-        id: find
+      - name: Fix Project Path
         run: |
           echo "=== ИЩЕМ ПРОЕКТ ==="
           find . -name "pubspec.yaml" -type f 2>/dev/null | head -5
           
-          PROJECT_PATH=$(find . -name "pubspec.yaml" -type f -not -path "*/.*" | head -1 | xargs dirname)
-          echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_OUTPUT
-          echo "✅ Найден проект: $PROJECT_PATH"
+          # Создаем symlink без кириллицы
+          ln -s "Рабочий стол/Syndi-AIworld/syndi_mobile" ./project
+          echo "✅ Создан symlink: ./project -> Рабочий стол/Syndi-AIworld/syndi_mobile"
           
-          ls -la "$PROJECT_PATH"
+          ls -la ./project
 
       - name: Check Flutter Environment
         run: |
           echo "=== FLUTTER DOCTOR ==="
           flutter doctor -v
-          
-          echo "=== JAVA VERSION ==="
-          java -version
 
       - name: Fix Android Configuration
-        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
+        working-directory: ./project
         run: |
           echo "=== ИСПРАВЛЯЕМ КОНФИГУРАЦИЮ ==="
           
-          # Проверяем текущие файлы
-          echo "--- gradle.properties ---"
-          cat android/gradle.properties
-          
-          echo "--- app/build.gradle (релевантные строки) ---"
-          grep -n "minifyEnabled\|shrinkResources\|proguardFiles" android/app/build.gradle || echo "Не найдено"
-          
-          # Добавляем AndroidX
+          # AndroidX
           echo "android.useAndroidX=true" >> android/gradle.properties
           echo "android.enableJetifier=true" >> android/gradle.properties
           echo "✅ AndroidX добавлен"
           
-          # Исправляем build.gradle
+          # Отключаем shrinkResources для стабильности
           sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
           sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
-          echo "✅ Build.gradle исправлен (отключен shrinkResources для отладки)"
+          echo "✅ Build.gradle исправлен"
 
       - name: Get Dependencies
-        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
+        working-directory: ./project
         run: |
-          echo "=== PUB GET ==="
           flutter clean
           flutter pub get
 
       - name: Build APK with Logs
-        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
+        working-directory: ./project
         run: |
-          echo "=== НАЧИНАЕМ СБОРКУ ==="
           flutter build apk --release --verbose 2>&1 | tee build.log
         continue-on-error: true
 
       - name: Analyze Build Errors
         if: always()
-        working-directory: ${{ steps.find.outputs.PROJECT_PATH }}
+        working-directory: ./project
         run: |
           echo "=========================================="
-          echo "=== АНАЛИЗ ОШИБОК СБОРКИ ==="
+          echo "=== АНАЛИЗ ОШИБОК ==="
           echo "=========================================="
           
           if [ -f build.log ]; then
-            echo ""
-            echo "=== ПОСЛЕДНИЕ 50 СТРОК ==="
-            tail -50 build.log
+            echo "=== ПОСЛЕДНИЕ 100 СТРОК ==="
+            tail -100 build.log
             
             echo ""
-            echo "=== ОШИБКИ DART/FLUTTER ==="
+            echo "=== ОШИБКИ ==="
             grep -n "Error:" build.log | head -10 || echo "Ошибок Dart не найдено"
-            
-            echo ""
-            echo "=== ОШИБКИ GRADLE ==="
-            grep -n -A 3 "FAILURE:\|What went wrong:\|Execution failed" build.log | head -30 || echo "Ошибок Gradle не найдено"
-            
-            echo ""
-            echo "=== ПРЕДУПРЕЖДЕНИЯ ==="
-            grep -n "warning:" build.log | head -10 || echo "Предупреждений нет"
+            grep -n -A 3 "FAILURE:" build.log | head -20 || echo "Ошибок Gradle не найдено"
           else
-            echo "❌ Файл build.log не создан"
+            echo "❌ build.log не создан"
           fi
           
           echo ""
-          echo "=== ПРОВЕРКА APK ==="
+          echo "=== ПОИСК APK ==="
           find . -name "*.apk" -type f 2>/dev/null || echo "APK не найдены"
-          
-          echo ""
-          echo "=== СТРУКТУРА OUTPUTS ==="
-          ls -la build/app/outputs/ 2>/dev/null || echo "Папка outputs не создана"
 
       - name: Upload APK if Success
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: release-apk
-          path: ${{ steps.find.outputs.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-release.apk
+          path: ./project/build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload Build Log if Failed
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-logs
-          path: ${{ steps.find.outputs.PROJECT_PATH }}/build.log
+          path: ./project/build.log
