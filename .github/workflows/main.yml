@@ -1,16 +1,30 @@
-name: Flutter APK Build
+name: Build Flutter APK
 
 on:
   push:
+    branches: [ main, master, develop ]
+    paths:
+      - '**/syndi_mobile/**'
+      - '.github/workflows/build_apk.yml'
+  pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Тип сборки'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - debug
+          - release
 
 env:
-  FLUTTER_VERSION: '3.19.0'
+  FLUTTER_VERSION: '3.24.5'
   JAVA_VERSION: '17'
 
 jobs:
-  build-android:
+  build:
     name: Build Android APK
     runs-on: ubuntu-latest
     
@@ -31,63 +45,68 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Find Project
+      - name: Find and Setup Project
         run: |
-          echo "=== ИЩЕМ ПРОЕКТ ==="
-          PROJECT_PATH=$(find . -name "pubspec.yaml" -type f -exec dirname {} \; | head -1)
-          echo "PROJECT_PATH=$PROJECT_PATH" >> $GITHUB_ENV
-          echo "✅ Найден: $PROJECT_PATH"
-
-      - name: Fix Android Build Config
-        run: |
-          cd "$PROJECT_PATH"
-          echo "=== ИСПРАВЛЯЕМ BUILD.GRADLE ==="
+          echo "=== Поиск проекта ==="
+          find . -name "pubspec.yaml" -path "*/syndi_mobile/*" -type f
           
-          # Показываем текущее состояние
-          echo "--- До исправления ---"
-          grep -n "shrinkResources\|minifyEnabled" android/app/build.gradle || echo "Не найдено"
-          
-          # ВАЖНО: Отключаем shrinkResources и minifyEnabled для стабильности
-          sed -i 's/shrinkResources true/shrinkResources false/g' android/app/build.gradle
-          sed -i 's/minifyEnabled true/minifyEnabled false/g' android/app/build.gradle
-          sed -i 's/shrinkResources false/shrinkResources false/g' android/app/build.gradle
-          sed -i 's/minifyEnabled false/minifyEnabled false/g' android/app/build.gradle
-          
-          echo "--- После исправления ---"
-          grep -n "shrinkResources\|minifyEnabled" android/app/build.gradle || echo "Не найдено"
-          
-          # AndroidX
-          if [ -f "android/gradle.properties" ]; then
-            echo "android.useAndroidX=true" >> android/gradle.properties
-            echo "android.enableJetifier=true" >> android/gradle.properties
+          # Создаем symlink без пробелов
+          PROJECT_PATH=$(find . -name "syndi_mobile" -type d | head -1)
+          if [ -n "$PROJECT_PATH" ]; then
+            ln -sf "$PROJECT_PATH" ./flutter_project
+            echo "✅ Создан symlink: $PROJECT_PATH -> ./flutter_project"
+          else
+            echo "❌ Проект не найден"
+            exit 1
           fi
           
+          cd ./flutter_project
+          
+          # AndroidX настройки
+          echo "android.useAndroidX=true" >> android/gradle.properties
+          echo "android.enableJetifier=true" >> android/gradle.properties
+          
           # Права на gradlew
-          chmod +x android/gradlew
+          chmod +x android/gradlew || true
+          
+          echo "=== Структура проекта ==="
+          ls -la
 
       - name: Get Dependencies
+        working-directory: ./flutter_project
         run: |
-          cd "$PROJECT_PATH"
           flutter clean
           flutter pub get
 
-      - name: Build Debug APK
+      - name: Build APK
+        working-directory: ./flutter_project
         run: |
-          cd "$PROJECT_PATH"
-          flutter build apk --debug --verbose 2>&1 | tee build.log
-        continue-on-error: true
+          BUILD_TYPE="${{ github.event.inputs.build_type || 'release' }}"
+          if [ "$BUILD_TYPE" == "debug" ]; then
+            flutter build apk --debug --verbose
+          else
+            flutter build apk --release --verbose
+          fi
 
-      - name: Show Errors
+      - name: Check Build Output
         if: always()
         run: |
-          cd "$PROJECT_PATH"
-          echo "=== ОШИБКИ ==="
-          tail -50 build.log
-          grep -i "error\|failure\|what went wrong" build.log | head -10 || true
+          echo "=== Проверка выходных файлов ==="
+          ls -la ./flutter_project/build/app/outputs/flutter-apk/ 2>/dev/null || echo "Директория не найдена"
+          find ./flutter_project/build -name "*.apk" 2>/dev/null || echo "APK не найдены"
 
-      - name: Upload Debug APK
-        if: success()
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
-          path: ${{ env.PROJECT_PATH }}/build/app/outputs/flutter-apk/app-debug.apk
+          name: syndi-${{ github.event.inputs.build_type || 'release' }}-apk
+          path: ./flutter_project/build/app/outputs/flutter-apk/*.apk
+          if-no-files-found: warn
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "### ✅ Сборка APK завершена" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Тип:** ${{ github.event.inputs.build_type || 'release' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Номер:** ${{ github.run_number }}" >> $GITHUB_STEP_SUMMARY
+          ls -lh ./flutter_project/build/app/outputs/flutter-apk/*.apk 2>/dev/null | awk '{print "- " $9 " (" $5 ")"}' >> $GITHUB_STEP_SUMMARY || echo "- APK файлы не найдены" >> $GITHUB_STEP_SUMMARY
