@@ -1,0 +1,52 @@
+name: Build Syndi APK
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: # Ручной запуск
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        distribution: 'zulu'
+        java-version: '17'
+    
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.16.x'
+        channel: 'stable'
+    
+    - name: Install dependencies
+      run: flutter pub get
+    
+    - name: Build APK
+      run: flutter build apk --release --split-per-abi
+    
+    - name: Upload APKs
+      uses: actions/upload-artifact@v3
+      with:
+        name: release-apks
+        path: build/app/outputs/flutter-apk/*.apk
+    
+    - name: Create Release
+      if: github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+          build/app/outputs/flutter-apk/app-x86_64-release.apk
+        name: Syndi AI ${{ github.run_number }}
+        tag_name: v1.0.${{ github.run_number }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
