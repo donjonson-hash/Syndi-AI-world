@@ -1,0 +1,53 @@
+# Syndi-AI Dockerfile
+# Multi-stage build for production optimization
+
+FROM python:3.11-slim as base
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONFAULTHANDLER=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt requirements_bot.txt ./
+RUN pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements_bot.txt
+
+# Production stage
+FROM base as production
+
+WORKDIR /app
+
+# Create non-root user for security
+RUN useradd -m -u 1000 syndi && chown -R syndi:syndi /app
+USER syndi
+
+# Copy application code
+COPY --chown=syndi:syndi . .
+
+# Expose API port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command (API mode)
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Bot stage
+FROM production as bot
+
+USER syndi
+
+CMD ["python", "-m", "bot.main"]
