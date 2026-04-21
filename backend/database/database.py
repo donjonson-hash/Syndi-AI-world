@@ -1,20 +1,28 @@
+"""
+Async DB engine — поддерживает SQLite (dev) и PostgreSQL (prod).
+URL читается из переменной окружения DATABASE_URL.
+Дефолт: SQLite ./startup_matcher.db (сохраняет существующие данные).
+"""
+import os
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import String, JSON, Integer, Float
-from typing import Optional, List, Dict, Any
+from sqlalchemy.orm import DeclarativeBase
 
-# Замени на свой реальный URL базы данных
-# DATABASE_URL = "postgresql+asyncpg://user:password@localhost/dbname"
-# Для локального тестирования можно оставить заглушку или использовать SQLite:
-DATABASE_URL = "sqlite+aiosqlite:///./startup_matcher.db"
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "sqlite+aiosqlite:///./startup_matcher.db",
+)
 
-engine = create_async_engine(DATABASE_URL, echo=True)
+# SQLite требует check_same_thread=False через connect_args
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+
+engine = create_async_engine(DATABASE_URL, echo=False, connect_args=connect_args)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
 
 class Base(DeclarativeBase):
     pass
 
-# Зависимость для получения сессии в FastAPI (когда до него дойдем)
+
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
