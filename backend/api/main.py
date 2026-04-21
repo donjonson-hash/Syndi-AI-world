@@ -30,8 +30,8 @@ from models.big_five import BigFiveTest, TestSubmission
 from models.user import UserCreate
 
 # ── Scoring-движок SyndiAI v0.1 ───────────────────────────────────────────────
-from services.scoring import FounderProfile, score_pair, SCORING_MODEL_VERSION
-from services.questionnaire_normalizer import normalize, ONBOARDING_SCHEMA_VERSION
+from scoring import FounderProfile, score_pair, SCORING_MODEL_VERSION
+from questionnaire_normalizer import normalize, ONBOARDING_SCHEMA_VERSION
 
 # ─────────────────────────────────────────────────────────────────────────────
 app = FastAPI(

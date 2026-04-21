@@ -4,8 +4,8 @@ SyndiAI Matching Service — адаптер поверх scoring.py
 """
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
-from services.scoring import FounderProfile, ScoreBreakdown, score_pair
-from services.questionnaire_normalizer import normalize
+from scoring import FounderProfile, ScoreBreakdown, score_pair
+from questionnaire_normalizer import normalize
 
 
 class MatchResult:
