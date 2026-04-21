@@ -18,7 +18,7 @@ BIG5_REVERSE_MASKS: Dict[str, List[bool]] = {
     "conscientiousness":   [False, False, False, True],
     "extraversion":        [False, True,  False, False],
     "agreeableness":       [False, False, True,  False],
-    "emotional_stability": [True,  False, False, True],
+    "emotional_stability": [True,  True,  False, False],  # es1=neuroticism(R), es2=neuroticism(R), es3=stability, es4=stability
 }
 
 def _scale(v: float, mn: float, mx: float) -> float:

@@ -177,5 +177,5 @@ def profile_volatile():
         "big5_c_1": 2, "big5_c_2": 2, "big5_c_3": 2,
         "big5_e_1": 2, "big5_e_2": 2,
         "big5_a_1": 2, "big5_a_2": 1,
-        "big5_es_1": 1, "big5_es_2": 1,  # очень нестабильный
+        "big5_es_1": 5, "big5_es_2": 1,  # нестабильный: es1=5(neuroticism,reversed→0) + es2=1(stability,direct→0) → ES≈0
     }

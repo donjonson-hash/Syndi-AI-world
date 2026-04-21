@@ -193,7 +193,7 @@ def _map_raw_to_normalizer(raw: Dict[str, Any]) -> Dict[str, Any]:
             "conscientiousness":   b5_group(["big5_c_1",  "big5_c_2",  "big5_c_3",  "big5_c_1"]),
             "extraversion":        b5_group(["big5_e_1",  "big5_e_2",  "big5_e_1",  "big5_e_2"]),
             "agreeableness":       b5_group(["big5_a_1",  "big5_a_2",  "big5_a_1",  "big5_a_2"]),
-            "emotional_stability": b5_group(["big5_es_1", "big5_es_2", "big5_es_1", "big5_es_2"]),
+            "emotional_stability": b5_group(["big5_es_1", "big5_es_1", "big5_es_2", "big5_es_2"]),  # es1=reversed pair, es2=direct pair
         }
 
     tc_str = str(raw.get("time_commitment", "40h")).lower()
