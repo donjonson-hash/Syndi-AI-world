@@ -413,10 +413,12 @@ async def get_questions():
 
 @app.post("/api/v1/test/submit")
 async def submit_test(submission: TestSubmission, db: AsyncSession = Depends(get_db)):
-    user = await crud.get_user_by_id(db, int(submission.user_id))
+    user = await crud.get_user_by_id(db, submission.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    profile = big_five_test.calculate_profile(submission.answers)
+    # calculate_profile ожидает Dict[int, int]: {question_id: value}
+    answers_dict = {a.question_id: a.value for a in submission.answers}
+    profile = big_five_test.calculate_profile(answers_dict)
     scores = {
         "openness": profile.openness,
         "conscientiousness": profile.conscientiousness,

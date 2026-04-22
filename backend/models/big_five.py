@@ -260,6 +260,7 @@ class AnswerRequest(BaseModel):
 
 class TestSubmission(BaseModel):
     """Модель отправки результатов теста"""
+    user_id: int
     answers: List[AnswerRequest]
 
 
