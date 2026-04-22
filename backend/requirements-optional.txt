@@ -1,0 +1,20 @@
+# SyndiAI — опциональные зависимости
+# Устанавливать только когда нужны:
+#   pip install -r requirements-optional.txt
+
+# LLM агенты (Kristina и др.)
+openai>=1.0.0
+
+# Telegram Bot
+aiogram>=3.0.0
+
+# DB миграции
+alembic==1.12.1
+
+# Планировщик задач
+apscheduler==3.10.4
+
+# Dev инструменты
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
