@@ -542,9 +542,9 @@ async def legacy_onboarding(data: RawQuestionnaire):
 
 
 @app.get("/match/{user_id}", response_model=List[MatchCard])
-async def legacy_match(user_id: str):
+async def legacy_match(user_id: str, db: AsyncSession = Depends(get_db)):
     """Alias: /match/{user_id} -> /api/v1/match/{user_id}"""
-    return await find_matches(user_id)
+    return await find_matches(user_id, db)
 
 
 @app.get("/bigfive/questions")
