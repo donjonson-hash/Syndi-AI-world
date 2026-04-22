@@ -304,29 +304,80 @@ class GenerateMatchesRequest(BaseModel):
     exclude_risk_flags: List[str] = []
 
 
+def _user_to_founder_profile(user) -> Optional[FounderProfile]:
+    """Строит FounderProfile из User SQLAlchemy объекта.
+    Использует psycho_profile (если есть) или заполняет дефолтами."""
+    try:
+        pp = user.psycho_profile or {}
+        # Отображаем role: builder/seller/operator/researcher (tourist/founder → builder)
+        role_map = {"builder": "builder", "seller": "seller",
+                    "operator": "operator", "researcher": "researcher"}
+        role = role_map.get(user.role, "builder")
+        return FounderProfile(
+            user_id=str(user.id),
+            time_commitment=float(pp.get("time_commitment", 40)),
+            no_salary_readiness=float(pp.get("no_salary_readiness", 6)),
+            intent_goal=pp.get("intent_goal", "build_company"),
+            launched_projects=float(pp.get("launched_projects", 0)),
+            self_execution_breadth=float(pp.get("self_execution_breadth", 5)),
+            primary_role=role,
+            no_go_roles=pp.get("no_go_roles", []),
+            decision_style=pp.get("decision_style", "discuss_first"),
+            conflict_style=pp.get("conflict_style", "calm_discussion"),
+            work_mode=pp.get("work_mode", "any"),
+            tempo=pp.get("tempo", "iterate_fast"),
+            sync_frequency=float(pp.get("sync_frequency", 50)),
+            accountability_disappear=float(pp.get("accountability_disappear", 50)),
+            accountability_ownership=float(pp.get("accountability_ownership", 50)),
+            big5=None,
+        )
+    except Exception:
+        return None
+
+
 @app.get("/api/v1/match/{user_id}", response_model=List[MatchCard])
-async def find_matches(user_id: str):
-    """Топ-3 кандидата по FounderFit + Big5 скорингу."""
+async def find_matches(user_id: str, db: AsyncSession = Depends(get_db)):
+    """Топ-3 кандидата из _profiles (онбординг) или БД (если профиль в _profiles нет)."""
+    # Сначала ищем в in-memory (onboarding flow)
     founder = _profiles.get(user_id)
-    if not founder:
-        raise HTTPException(status_code=404, detail="Profile not found. Submit /api/v1/onboarding first.")
-    candidates = [p for uid, p in _profiles.items() if uid != user_id]
-    if not candidates:
-        raise HTTPException(status_code=404, detail="No other candidates yet")
+    candidates_fp: List[FounderProfile] = []
+
+    if founder:
+        candidates_fp = [p for uid, p in _profiles.items() if uid != user_id]
+    else:
+        # Фоллбэк: строим из БД
+        try:
+            uid_int = int(user_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="user_id must be an integer")
+        db_user = await crud.get_user_by_id(db, uid_int)
+        if not db_user:
+            raise HTTPException(status_code=404, detail="User not found")
+        founder = _user_to_founder_profile(db_user)
+        if not founder:
+            raise HTTPException(status_code=422, detail="Could not build profile from user data")
+        # Кандидаты: все другие пользователи из БД
+        db_candidates = await crud.get_all_candidates(db, exclude_user_id=uid_int)
+        candidates_fp = [p for p in (_user_to_founder_profile(u) for u in db_candidates) if p]
+
+    if not candidates_fp:
+        raise HTTPException(status_code=404,
+            detail="Пока нет других основателей. Попросите друга зарегистрироваться.")
+
     results = []
-    for c in candidates:
+    for c in candidates_fp:
         score = score_pair(founder, c)
         reasons = []
         if score.role_score >= 80:
-            reasons.append("разные сильные стороны (комплементарные роли)")
+            reasons.append("разные сильные стороны")
         if score.intent_score >= 70:
             reasons.append("одинаковый уровень вовлечённости")
         if score.tempo_score >= 70:
-            reasons.append("совпадает темп работы")
+            reasons.append("совпадает темп")
         results.append(MatchCard(
             candidate_id=c.user_id,
-            total_score=score.total_compatibility_score,
-            why_there_is_a_chance="; ".join(reasons) if reasons else "Basic compatibility",
+            total_score=round(score.total_compatibility_score, 1),
+            why_there_is_a_chance=", ".join(reasons) if reasons else "Базовая совместимость",
             risks=score.risk_flags,
         ))
     results.sort(key=lambda x: x.total_score, reverse=True)
