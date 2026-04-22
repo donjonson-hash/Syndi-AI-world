@@ -1,40 +1,69 @@
 #!/bin/bash
-# Syndi — быстрый деплой на VPS
-# Запускать из папки backend/ на сервере:
+# Syndi — деплой без Docker (venv + uvicorn)
+# Запускать из папки backend/:
 #   bash deploy.sh
 
 set -e
-
-echo "=== Syndi Deploy ==="
-
-# 1. Pull последние изменения
 cd "$(dirname "$0")"
-git pull origin main
 
-# 2. Сборка и запуск
-docker compose -f docker-compose.prod.yml up -d --build
+echo "=== Syndi Deploy (venv + uvicorn) ==="
 
-# 3. Ждём health check
-echo "Waiting for service to be healthy..."
-sleep 5
+# 1. Активируем venv (создаём если нет)
+if [ ! -d "venv" ]; then
+    echo "Creating venv..."
+    python3 -m venv venv
+fi
 
-STATUS=$(docker compose -f docker-compose.prod.yml ps --format json | python3 -c "
-import sys, json
-data = sys.stdin.read().strip()
-if data:
-    for line in data.splitlines():
-        try:
-            s = json.loads(line)
-            print(s.get('Health', s.get('Status', 'unknown')))
-        except:
-            pass
-" 2>/dev/null || echo "starting")
+source venv/bin/activate
+echo "✓ venv activated"
 
-echo "Status: $STATUS"
+# 2. Устанавливаем зависимости
+pip install -q -r requirements.txt
+echo "✓ dependencies installed"
 
-# 4. Проверяем /health
-curl -sf http://localhost:8081/health && echo "" && echo "✓ Service is UP"
+# 3. Останавливаем старый процесс если был
+OLD_PID=$(lsof -ti :8081 2>/dev/null || true)
+if [ -n "$OLD_PID" ]; then
+    echo "Stopping old process (PID $OLD_PID)..."
+    kill "$OLD_PID" 2>/dev/null || true
+    sleep 1
+fi
+
+# 4. Запускаем uvicorn в фоне
+echo "Starting uvicorn on port 8081..."
+nohup uvicorn main:app \
+    --host 0.0.0.0 \
+    --port 8081 \
+    --workers 1 \
+    --log-level info \
+    > uvicorn.log 2>&1 &
+
+UVICORN_PID=$!
+echo $UVICORN_PID > uvicorn.pid
+echo "✓ uvicorn started (PID $UVICORN_PID)"
+
+# 5. Ждём запуска
+echo "Waiting for startup..."
+for i in $(seq 1 10); do
+    sleep 1
+    if curl -sf http://localhost:8081/health > /dev/null 2>&1; then
+        echo "✓ Health check passed"
+        break
+    fi
+    if [ "$i" -eq 10 ]; then
+        echo "✗ Health check failed. Last log lines:"
+        tail -20 uvicorn.log
+        exit 1
+    fi
+done
+
+# 6. Результат
+PUBLIC_IP=$(curl -sf https://api.ipify.org 2>/dev/null || echo "YOUR_SERVER_IP")
 echo ""
-echo "=== Done ==="
-echo "UI:      http://$(curl -s ifconfig.me):8081"
-echo "API docs: http://$(curl -s ifconfig.me):8081/docs"
+echo "=== Syndi is running ==="
+echo "  UI:       http://${PUBLIC_IP}:8081"
+echo "  API docs: http://${PUBLIC_IP}:8081/docs"
+echo "  Health:   http://${PUBLIC_IP}:8081/health"
+echo ""
+echo "Logs: tail -f $(pwd)/uvicorn.log"
+echo "Stop: kill \$(cat $(pwd)/uvicorn.pid)"
