@@ -9,6 +9,7 @@ Syndi Tinder-Founder API
 Scoring-движок: services/scoring.py + services/questionnaire_normalizer.py
 """
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -34,10 +35,21 @@ from scoring import FounderProfile, score_pair, SCORING_MODEL_VERSION
 from questionnaire_normalizer import normalize, ONBOARDING_SCHEMA_VERSION
 
 # ─────────────────────────────────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup / shutdown через современный lifespan-handler."""
+    await init_db()
+    print("✓ Database ready")
+    print(f"✓ Scoring model: {SCORING_MODEL_VERSION}")
+    yield
+    await close_db()
+
+
 app = FastAPI(
     title="Syndi Tinder-Founder API",
     description="Отсекаем туристов. Находим сооснователей.",
     version="1.2.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -59,16 +71,7 @@ _profiles: Dict[str, FounderProfile] = {}
 # Lifecycle
 # ─────────────────────────────────────────────────────────────────────────────
 
-@app.on_event("startup")
-async def startup():
-    await init_db()
-    print("✓ Database ready")
-    print(f"✓ Scoring model: {SCORING_MODEL_VERSION}")
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await close_db()
+# lifecycle управляется через lifespan= выше
 
 
 # ─────────────────────────────────────────────────────────────────────────────

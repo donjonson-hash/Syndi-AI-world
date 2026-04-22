@@ -3,10 +3,10 @@ User Models
 Модели пользователей и их профилей
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Optional, Dict
 from enum import Enum
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from uuid import UUID, uuid4
 
 from .big_five import BigFiveProfile
@@ -78,11 +78,10 @@ class UserProfile(BaseModel):
     # Настройки
     is_active: bool = True
     is_verified: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
-    
-    class Config:
-        from_attributes = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserCreate(BaseModel):
