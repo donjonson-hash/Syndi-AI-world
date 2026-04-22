@@ -18,6 +18,7 @@ from pathlib import Path
 from uuid import uuid4
 from typing import Any, Dict, List, Optional
 
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -44,10 +45,19 @@ logger = logging.getLogger(__name__)
 # App
 # ═════════════════════════════════════════════════════════════════════════════
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    logger.info(f"Database ready | Scoring: {SCORING_MODEL_VERSION} | Schema: {ONBOARDING_SCHEMA_VERSION}")
+    yield
+    await close_db()
+
+
 app = FastAPI(
     title="Syndi AI — Co-Founder Matching Platform",
     description="Находим идеальных сооснователей по психологической совместимости и комплементарности навыков.",
     version="1.3.0",
+    lifespan=lifespan,
 )
 
 # ── CORS — для разработки разрешаем всё, в проде настраивается через env ───
@@ -105,15 +115,7 @@ _profiles: Dict[str, FounderProfile] = {}
 # Lifecycle
 # ═════════════════════════════════════════════════════════════════════════════
 
-@app.on_event("startup")
-async def startup():
-    await init_db()
-    logger.info(f"Database ready | Scoring: {SCORING_MODEL_VERSION} | Schema: {ONBOARDING_SCHEMA_VERSION}")
-
-
-@app.on_event("shutdown")
-async def shutdown():
-    await close_db()
+# lifecycle управляется через lifespan= выше
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -364,26 +366,36 @@ async def generate_matches(payload: GenerateMatchesRequest):
 # Users CRUD
 # ═════════════════════════════════════════════════════════════════════════════
 
+# Поля которые есть в SQLAlchemy User (все остальные из UserCreate игнорируем)
+_USER_DB_FIELDS = {"name", "email", "role", "is_active"}
+
+
 @app.post("/api/v1/users")
 async def create_user(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
     existing = await crud.get_user_by_email(db, user_data.email)
     if existing:
         raise HTTPException(status_code=400, detail="Email already exists")
-    user_dict = user_data.dict()
-    user_dict["id"] = str(uuid4())
+    # Передаём только поля которые есть в User (SQLAlchemy бросает TypeError на лишних)
+    raw = user_data.model_dump()
+    user_dict = {k: v for k, v in raw.items() if k in _USER_DB_FIELDS and v is not None}
+    user_dict.setdefault("role", "founder")
     user = await crud.create_user(db, user_dict)
-    return {"id": user.id, "email": user.email, "name": user.name}
+    return {"id": user.id, "email": user.email, "name": user.name, "role": user.role}
 
 
 @app.get("/api/v1/users")
 async def list_users(db: AsyncSession = Depends(get_db)):
-    users = await crud.get_users(db)
+    users = await crud.get_all_users(db)
     return [{"id": u.id, "email": u.email, "name": u.name} for u in users]
 
 
 @app.get("/api/v1/users/{user_id}")
 async def get_user(user_id: str, db: AsyncSession = Depends(get_db)):
-    user = await crud.get_user(db, user_id)
+    try:
+        uid = int(user_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="user_id must be an integer")
+    user = await crud.get_user_by_id(db, uid)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     return {"id": user.id, "email": user.email, "name": user.name}
@@ -401,7 +413,7 @@ async def get_questions():
 
 @app.post("/api/v1/test/submit")
 async def submit_test(submission: TestSubmission, db: AsyncSession = Depends(get_db)):
-    user = await crud.get_user(db, str(submission.user_id))
+    user = await crud.get_user_by_id(db, int(submission.user_id))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     profile = big_five_test.calculate_profile(submission.answers)
@@ -412,7 +424,7 @@ async def submit_test(submission: TestSubmission, db: AsyncSession = Depends(get
         "agreeableness": profile.agreeableness,
         "neuroticism": profile.neuroticism,
     }
-    await crud.create_big_five_result(db, str(submission.user_id), scores)
+    await crud.create_big_five_result(db, int(submission.user_id), scores)
     return {"user_id": str(submission.user_id), "profile": scores}
 
 
