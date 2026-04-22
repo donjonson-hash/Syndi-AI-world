@@ -88,6 +88,7 @@ class UserCreate(BaseModel):
     """Модель создания пользователя"""
     email: EmailStr
     name: str
+    role: str = "founder"          # builder | seller | operator | researcher | founder
     title: Optional[str] = None
     bio: Optional[str] = None
     location: Optional[str] = None

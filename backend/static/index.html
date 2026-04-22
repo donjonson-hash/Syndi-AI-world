@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Syndi · Founder Match</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Шапка -->
+    <header>
+      <h1>✨ Syndi</h1>
+      <div id="user-status">не авторизован</div>
+    </header>
+
+    <!-- Основной контент -->
+    <main id="content">
+      <!-- Шаг 1: Регистрация / ввод данных -->
+      <section id="step-profile" class="step active">
+        <h2>Создай профиль основателя</h2>
+        <form id="profile-form">
+          <input type="text" id="name" placeholder="Имя" required>
+          <input type="email" id="email" placeholder="Email" required>
+          <select id="role" required>
+            <option value="">Выбери роль</option>
+            <option value="builder">Строитель (Builder)</option>
+            <option value="seller">Продавец (Seller)</option>
+            <option value="tourist">Турист (Tourist)</option>
+            <option value="operator">Оператор (Operator)</option>
+          </select>
+          <textarea id="bio" placeholder="О себе (кратко)"></textarea>
+          <button type="submit">Продолжить</button>
+        </form>
+      </section>
+
+      <!-- Шаг 2: Big Five тест -->
+      <section id="step-test" class="step">
+        <h2>Психологический тест</h2>
+        <p id="question-text"></p>
+        <div class="likert">
+          <button value="1">Совсем не согласен</button>
+          <button value="2">Не согласен</button>
+          <button value="3">Нейтрально</button>
+          <button value="4">Согласен</button>
+          <button value="5">Полностью согласен</button>
+        </div>
+        <div id="progress">Вопрос 1 / 15</div>
+      </section>
+
+      <!-- Шаг 3: Просмотр матчей (карточки) -->
+      <section id="step-matches" class="step">
+        <h2>Твои потенциальные сооснователи</h2>
+        <div id="matches-container" class="card-stack"></div>
+        <div class="actions">
+          <button id="skip-btn" class="secondary">👎 Пропустить</button>
+          <button id="like-btn" class="primary">👍 Нравится</button>
+        </div>
+        <button id="refresh-matches" class="text-btn">Загрузить ещё</button>
+      </section>
+    </main>
+
+    <!-- Индикатор загрузки -->
+    <div id="loader" class="hidden">Загрузка...</div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
