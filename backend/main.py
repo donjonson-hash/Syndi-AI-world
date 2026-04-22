@@ -12,8 +12,8 @@ import uvicorn
 from database.database import get_db
 from database.crud import get_user_by_name, get_all_candidates, get_user_by_id
 from services.matching import MatchingService
-from services.scoring import FounderProfile, score_pair, SCORING_MODEL_VERSION
-from services.questionnaire_normalizer import normalize, ONBOARDING_SCHEMA_VERSION
+from scoring import FounderProfile, score_pair, SCORING_MODEL_VERSION
+from questionnaire_normalizer import normalize, ONBOARDING_SCHEMA_VERSION
 
 app = FastAPI(
     title="Syndi Match API",

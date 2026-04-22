@@ -23,8 +23,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.database import get_db, init_db, close_db
-from db import crud
+from database.database import get_db, init_db, close_db
+from database import crud
 
 from models.big_five import BigFiveTest, TestSubmission
 from models.user import UserCreate

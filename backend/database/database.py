@@ -26,3 +26,15 @@ class Base(DeclarativeBase):
 async def get_db() -> AsyncSession:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+async def init_db():
+    """Initialize database — create all tables."""
+    from database.models import Base as ModelsBase  # noqa: avoid circular at module level
+    async with engine.begin() as conn:
+        await conn.run_sync(ModelsBase.metadata.create_all)
+
+
+async def close_db():
+    """Dispose engine connections."""
+    await engine.dispose()
