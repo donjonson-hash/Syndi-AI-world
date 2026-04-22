@@ -13,15 +13,17 @@ from httpx import AsyncClient, ASGITransport
 import os
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
-from api.main import app, _profiles   # noqa: E402
+from main import app, _profiles, _rate_store   # noqa: E402
 
 
 @pytest_asyncio.fixture(autouse=True)
-async def clear_profiles():
-    """Очищаем in-memory профили перед каждым тестом."""
+async def clear_state():
+    """Очищаем in-memory состояние перед каждым тестом."""
     _profiles.clear()
+    _rate_store.clear()
     yield
     _profiles.clear()
+    _rate_store.clear()
 
 
 @pytest_asyncio.fixture

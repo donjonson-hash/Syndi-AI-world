@@ -1,7 +1,7 @@
 """
 Kristina UX Designer Agent - специализированный агент для UX/UI дизайна
 """
-from agents.kristina import KristinaAgent
+from agents.kristina import KristinaUXDesigner as KristinaAgent
 from typing import Dict, Any
 
 class KristinaUXDesignerAgent(KristinaAgent):

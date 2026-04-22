@@ -1,11 +1,15 @@
-from models import UserProfile
+"""
+Quantum Path Analysis — генерация альтернативных сценариев жизни.
+"""
 import random
-print("[DEBUG] Запуск analysis.py")
+from typing import List, Dict, Any
+
+from .advice import MysticUserProfile
 
 
-def analyze_quantum_paths(profile: UserProfile) -> list:
+def analyze_quantum_paths(profile: MysticUserProfile) -> List[Dict[str, Any]]:
     """
-    Генерирует альтернативные сценарии жизни на основе профиля
+    Генерирует альтернативные сценарии жизни на основе профиля.
     """
     mbti = profile.mbti or "INFP"
     enneagram = profile.enneagram or "Тип 4"

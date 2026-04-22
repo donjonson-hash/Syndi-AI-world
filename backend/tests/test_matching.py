@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from models.user import UserProfile, Skill, SkillLevel, UserGoal
 from models.big_five import BigFiveProfile
-from services.matching import MatchingEngine, QuickMatcher
+from core.matching.matching import MatchingEngine, QuickMatcher
 
 
 class TestMatchingEngine:

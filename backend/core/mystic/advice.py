@@ -1,10 +1,25 @@
-from handlers.profile import UserProfile
+"""
+Quantum Advice — генерация персонализированных советов на основе профиля.
+"""
 import random
-print("[DEBUG] Запуск advice.py")
+import logging
+from dataclasses import dataclass
+from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
-def generate_quantum_advice(profile: UserProfile) -> str:
-    """Генерирует персонализированный совет"""
+@dataclass
+class MysticUserProfile:
+    """Минимальный профиль для мистического модуля."""
+    mbti: Optional[str] = None
+    enneagram: Optional[str] = None
+    psychomatrix: Optional[Dict[str, Any]] = None
+    tarot_archetypes: Optional[list] = None
+
+
+def generate_quantum_advice(profile: MysticUserProfile) -> str:
+    """Генерирует персонализированный совет на основе профиля."""
     advices = {
         "conservative": [
             "Доверьтесь проверенным методам сегодня",
@@ -28,9 +43,5 @@ def generate_quantum_advice(profile: UserProfile) -> str:
     else:
         category = "conservative"
 
+    logger.info(f"Quantum advice category: {category}")
     return random.choice(advices[category]) + f"\n\n(Выбор: {category})"
-
-    # В handlers.py
-
-
-logging.info(f"Quantum request from {callback.from_user.id} at {datetime.now()}")

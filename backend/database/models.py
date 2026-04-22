@@ -8,35 +8,24 @@ SyndiAI Database Models
   - Новые таблицы (founder_profiles, match_candidates, trials, trial_tasks, trial_events)
     добавляются рядом.
 
-SQLite: все типы совместимы (JSON → Text, UUID → String, ARRAY → JSON).
-PostgreSQL: используй нативные типы через conditional import ниже.
+SQLite: все типы совместимы (JSON → Text, UUID → String).
+PostgreSQL: использует нативные JSONB для колонок с JSON (автоматически при использовании JSON типа).
 """
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey,
-    Index, Integer, String, Text,
+    Index, Integer, String, Text, JSON
 )
 from sqlalchemy.orm import relationship
 from database.database import Base
 
-# JSON / ARRAY-совместимый тип (SQLite хранит как Text, Postgres — как JSONB)
-try:
-    from sqlalchemy.dialects.postgresql import JSONB as JSONType, ARRAY
-    _pg = True
-except ImportError:
-    from sqlalchemy import JSON as JSONType
-    _pg = False
-
-
 def _now():
     return datetime.now(timezone.utc)
 
-
 def _uuid():
     return str(uuid.uuid4())
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Существующая таблица — users
@@ -51,9 +40,9 @@ class User(Base):
     name = Column(String(50), nullable=False)
     role = Column(String(50), nullable=False)
 
-    skills            = Column(JSONType, nullable=True)
-    psycho_profile    = Column(JSONType, nullable=True)
-    enneagram         = Column(JSONType, nullable=True)
+    skills            = Column(JSON, nullable=True)
+    psycho_profile    = Column(JSON, nullable=True)
+    enneagram         = Column(JSON, nullable=True)
     match_score       = Column(Float,    nullable=True)
     ai_interpretation = Column(Text,     nullable=True)
 
@@ -79,7 +68,6 @@ class User(Base):
             "enneagram": self.enneagram,
         }
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # founder_profiles — хранит raw + normalized profile основателя
 # ─────────────────────────────────────────────────────────────────────────────
@@ -90,8 +78,8 @@ class FounderProfileDB(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"),
                      nullable=False, unique=True)
 
-    raw_answers             = Column(JSONType, nullable=False)
-    normalized_profile      = Column(JSONType, nullable=False)
+    raw_answers             = Column(JSON, nullable=False)
+    normalized_profile      = Column(JSON, nullable=False)
     onboarding_schema_version = Column(String(64),
                                        default="syndiai-onboarding-schema-v0.1",
                                        nullable=False)
@@ -101,14 +89,17 @@ class FounderProfileDB(Base):
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
 
     user = relationship("User", back_populates="founder_profile")
-    match_requests  = relationship("MatchCandidateDB",
-                                   foreign_keys="MatchCandidateDB.requester_user_id",
-                                   back_populates="requester_profile")
+    # Исправленный relationship с явным primaryjoin
+    match_requests  = relationship(
+        "MatchCandidateDB",
+        foreign_keys="MatchCandidateDB.requester_user_id",
+        back_populates="requester_profile",
+        primaryjoin="FounderProfileDB.user_id == MatchCandidateDB.requester_user_id"
+    )
 
     __table_args__ = (
         Index("ix_founder_profiles_user_id", "user_id"),
     )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # match_candidates — результат score_pair() для пары основателей
@@ -120,16 +111,14 @@ class MatchCandidateDB(Base):
     requester_user_id  = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     candidate_user_id  = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
-    score_breakdown           = Column(JSONType, nullable=False)
+    score_breakdown           = Column(JSON, nullable=False)
     total_compatibility_score = Column(Float,    nullable=False)
     founder_fit_score         = Column(Float,    nullable=False)
     big5_fit_score            = Column(Float,    nullable=True)
-    # SQLite-friendly: храним как JSON-список строк
-    risk_flags                = Column(JSONType, nullable=False, default=list)
+    risk_flags                = Column(JSON, nullable=False, default=list)
     scoring_model_version     = Column(String(64),
                                        default="syndiai-founder-v0.1", nullable=False)
 
-    # Статус: pending | accepted | declined | expired
     status     = Column(String(20), default="pending", nullable=False)
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
@@ -148,7 +137,6 @@ class MatchCandidateDB(Base):
         Index("ix_match_candidates_status",    "status"),
     )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # trials — 3–5-дневный поведенческий тест
 # ─────────────────────────────────────────────────────────────────────────────
@@ -163,13 +151,12 @@ class TrialDB(Base):
 
     scenario_type      = Column(String(64),  default="standard_3day", nullable=False)
     duration_days      = Column(Integer,     default=3,               nullable=False)
-    # Статус: active | completed | abandoned | expired
     status             = Column(String(20),  default="active",        nullable=False)
 
     started_at         = Column(DateTime(timezone=True), default=_now,  nullable=False)
     ends_at            = Column(DateTime(timezone=True), nullable=False)
     completed_at       = Column(DateTime(timezone=True), nullable=True)
-    behavioral_summary = Column(JSONType, nullable=True)
+    behavioral_summary = Column(JSON, nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
@@ -186,7 +173,6 @@ class TrialDB(Base):
         Index("ix_trials_status",   "status"),
     )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # trial_tasks — задачи внутри trial
 # ─────────────────────────────────────────────────────────────────────────────
@@ -200,7 +186,6 @@ class TrialTaskDB(Base):
     title       = Column(String(255), nullable=False)
     description = Column(Text,        nullable=True)
     due_at      = Column(DateTime(timezone=True), nullable=True)
-    # Статус: pending | in_progress | completed | missed
     status      = Column(String(20), default="pending", nullable=False)
 
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -214,7 +199,6 @@ class TrialTaskDB(Base):
         Index("ix_trial_tasks_assigned_to", "assigned_to"),
     )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # trial_events — behavioral telemetry
 # ─────────────────────────────────────────────────────────────────────────────
@@ -225,10 +209,8 @@ class TrialEventDB(Base):
     trial_id   = Column(String(36), ForeignKey("trials.id", ondelete="CASCADE"), nullable=False)
     user_id    = Column(Integer,    ForeignKey("users.id"),                       nullable=False)
 
-    # task_completed | message_sent | deadline_missed | check_in |
-    # review_submitted | trial_abandoned | custom
     event_type  = Column(String(64), nullable=False)
-    payload     = Column(JSONType,   nullable=True)
+    payload     = Column(JSON,   nullable=True)
     occurred_at = Column(DateTime(timezone=True), default=_now, nullable=False)
     created_at  = Column(DateTime(timezone=True), default=_now, nullable=False)
 
