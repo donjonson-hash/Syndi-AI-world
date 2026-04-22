@@ -1,0 +1,29 @@
+version: "3.9"
+
+# Production docker-compose — SQLite (no external DB needed for demo)
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d --build
+
+services:
+  syndi:
+    build:
+      context: .
+      target: production
+    ports:
+      - "8081:8000"          # внешний:внутренний — меняй внешний под свой сервер
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./syndi.db
+      - ENV=production
+      - RATE_LIMIT_PER_MINUTE=120
+    volumes:
+      - syndi_data:/app/syndi_db   # персистентность SQLite между перезапусками
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  syndi_data:
