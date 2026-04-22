@@ -76,3 +76,12 @@ async def get_all_users(db: AsyncSession) -> List[User]:
     result = await db.execute(select(User))
     return result.scalars().all()
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Big Five results (хранится в психо-профиле User)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def create_big_five_result(db: AsyncSession, user_id: int,
+                                  scores: Dict[str, Any]) -> Optional[User]:
+    """Сохраняет Big Five профиль в поле psycho_profile пользователя."""
+    return await update_user(db, user_id, {"psycho_profile": scores})
