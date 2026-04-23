@@ -268,8 +268,8 @@ async def submit_raw_questionnaire(data: RawQuestionnaire, db: AsyncSession = De
         if not db_user:
             db_user = await crud.create_user(db, {
                 "name": profile.user_id,
-                "role": profile.role,
-                "skills": profile.skills,
+                "role": str(profile.primary_role),
+                "skills": [],
                 "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
             })
         await crud.create_founder_profile(
