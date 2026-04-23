@@ -135,7 +135,7 @@ async def seed_profiles():
                 if not db_user:
                     db_user = await crud.create_user(db, {
                         "name": user_id_str,
-                        "role": profile.primary_role.value,
+                        "role": str(profile.primary_role),
                         "skills": [],
                         "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
                     })
