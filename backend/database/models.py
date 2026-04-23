@@ -1,12 +1,13 @@
 """
 SyndiAI Database Models
-Версия: syndiai-schema-v0.1
+Версия: syndiai-schema-v0.2
 
 Принцип миграции без потери данных:
   - Таблица users расширяется новыми nullable-колонками (raw_answers, normalized_profile,
     onboarding_schema_version). Существующие строки сохраняются.
   - Новые таблицы (founder_profiles, match_candidates, trials, trial_tasks, trial_events)
     добавляются рядом.
+  - v0.2: добавлены таблицы likes и matches для Tinder-механики.
 
 SQLite: все типы совместимы (JSON → Text, UUID → String).
 PostgreSQL: использует нативные JSONB для колонок с JSON (автоматически при использовании JSON типа).
@@ -29,13 +30,10 @@ def _uuid():
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Существующая таблица — users
-# Расширена nullable-колонками для SyndiAI v0.1.
-# Старые строки не затрагиваются.
 # ─────────────────────────────────────────────────────────────────────────────
 class User(Base):
     __tablename__ = "users"
 
-    # ── Старые поля (неизменны) ────────────────────────────────────────────
     id   = Column(Integer, primary_key=True, index=True, autoincrement=True)
     name = Column(String(50), nullable=False)
     role = Column(String(50), nullable=False)
@@ -46,17 +44,19 @@ class User(Base):
     match_score       = Column(Float,    nullable=True)
     ai_interpretation = Column(Text,     nullable=True)
 
-    # ── Новые поля SyndiAI v0.1 (все nullable → нет проблем с существующими строками) ─
     email      = Column(String(255), unique=True, nullable=True)
     is_active  = Column(Boolean, default=True, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_now, nullable=True)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=True)
 
-    # ── Отношения ──────────────────────────────────────────────────────────
     founder_profile  = relationship("FounderProfileDB", back_populates="user",
                                     uselist=False, cascade="all, delete-orphan")
     initiated_trials = relationship("TrialDB", foreign_keys="TrialDB.initiator_id",
                                     back_populates="initiator")
+    likes_given    = relationship("LikeDB", foreign_keys="LikeDB.from_user_id",
+                                  back_populates="from_user", cascade="all, delete-orphan")
+    likes_received = relationship("LikeDB", foreign_keys="LikeDB.to_user_id",
+                                  back_populates="to_user", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<User(id={self.id}, name='{self.name}', role='{self.role}')>"
@@ -69,7 +69,7 @@ class User(Base):
         }
 
 # ─────────────────────────────────────────────────────────────────────────────
-# founder_profiles — хранит raw + normalized profile основателя
+# founder_profiles
 # ─────────────────────────────────────────────────────────────────────────────
 class FounderProfileDB(Base):
     __tablename__ = "founder_profiles"
@@ -89,7 +89,6 @@ class FounderProfileDB(Base):
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)
 
     user = relationship("User", back_populates="founder_profile")
-    # Исправленный relationship с явным primaryjoin
     match_requests  = relationship(
         "MatchCandidateDB",
         foreign_keys="MatchCandidateDB.requester_user_id",
@@ -102,7 +101,7 @@ class FounderProfileDB(Base):
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# match_candidates — результат score_pair() для пары основателей
+# match_candidates
 # ─────────────────────────────────────────────────────────────────────────────
 class MatchCandidateDB(Base):
     __tablename__ = "match_candidates"
@@ -138,7 +137,7 @@ class MatchCandidateDB(Base):
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# trials — 3–5-дневный поведенческий тест
+# trials
 # ─────────────────────────────────────────────────────────────────────────────
 class TrialDB(Base):
     __tablename__ = "trials"
@@ -174,7 +173,7 @@ class TrialDB(Base):
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# trial_tasks — задачи внутри trial
+# trial_tasks
 # ─────────────────────────────────────────────────────────────────────────────
 class TrialTaskDB(Base):
     __tablename__ = "trial_tasks"
@@ -200,7 +199,7 @@ class TrialTaskDB(Base):
     )
 
 # ─────────────────────────────────────────────────────────────────────────────
-# trial_events — behavioral telemetry
+# trial_events
 # ─────────────────────────────────────────────────────────────────────────────
 class TrialEventDB(Base):
     __tablename__ = "trial_events"
@@ -221,4 +220,50 @@ class TrialEventDB(Base):
         Index("ix_trial_events_user_id",     "user_id"),
         Index("ix_trial_events_type",        "event_type"),
         Index("ix_trial_events_occurred_at", "occurred_at"),
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# likes — свайп-решение основателя (like / dislike)  [v0.2]
+# ─────────────────────────────────────────────────────────────────────────────
+class LikeDB(Base):
+    __tablename__ = "likes"
+
+    id           = Column(String(36), primary_key=True, default=_uuid)
+    from_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    to_user_id   = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    is_like      = Column(Boolean, nullable=False)   # True = like, False = dislike
+
+    created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+
+    from_user = relationship("User", foreign_keys=[from_user_id], back_populates="likes_given")
+    to_user   = relationship("User", foreign_keys=[to_user_id],   back_populates="likes_received")
+
+    __table_args__ = (
+        Index("ix_likes_from_to", "from_user_id", "to_user_id", unique=True),
+        Index("ix_likes_to_user", "to_user_id"),
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# matches — взаимный лайк = match  [v0.2]
+# ─────────────────────────────────────────────────────────────────────────────
+class MatchDB(Base):
+    __tablename__ = "matches"
+
+    id        = Column(String(36), primary_key=True, default=_uuid)
+    user_a_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    user_b_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+    match_score = Column(Float, nullable=True)
+    status      = Column(String(20), default="active", nullable=False)  # active / archived
+
+    created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
+
+    user_a = relationship("User", foreign_keys=[user_a_id])
+    user_b = relationship("User", foreign_keys=[user_b_id])
+
+    __table_args__ = (
+        Index("ix_matches_pair",   "user_a_id", "user_b_id", unique=True),
+        Index("ix_matches_user_a", "user_a_id"),
+        Index("ix_matches_user_b", "user_b_id"),
+        Index("ix_matches_status", "status"),
     )
