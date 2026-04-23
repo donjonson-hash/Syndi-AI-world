@@ -47,32 +47,20 @@ def upgrade() -> None:
 
     # ── 1. Расширяем таблицу users ────────────────────────────────────────
     # render_as_batch=True в env.py позволяет ALTER TABLE в SQLite
-    with op.batch_alter_table("users", schema=None) as batch_op:
-        # Проверяем через try/except — безопасно если колонка уже есть
+    # Каждую колонку добавляем отдельным batch_alter_table — иначе SQLite batch mode
+    # выдаёт CircularDependencyError при добавлении нескольких колонок сразу.
+    _new_cols = [
+        sa.Column("email",      sa.String(255),              nullable=True),
+        sa.Column("is_active",  sa.Boolean(),                nullable=True, server_default=sa.text("1")),
+        sa.Column("created_at", sa.DateTime(timezone=True),  nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True),  nullable=True),
+    ]
+    for _col in _new_cols:
         try:
-            batch_op.add_column(sa.Column(
-                "email", sa.String(255), nullable=True
-            ))
+            with op.batch_alter_table("users", schema=None) as batch_op:
+                batch_op.add_column(_col)
         except Exception:
-            pass
-        try:
-            batch_op.add_column(sa.Column(
-                "is_active", sa.Boolean(), nullable=True, server_default=sa.text("1")
-            ))
-        except Exception:
-            pass
-        try:
-            batch_op.add_column(sa.Column(
-                "created_at", sa.DateTime(timezone=True), nullable=True
-            ))
-        except Exception:
-            pass
-        try:
-            batch_op.add_column(sa.Column(
-                "updated_at", sa.DateTime(timezone=True), nullable=True
-            ))
-        except Exception:
-            pass
+            pass  # колонка уже существует
 
     # ── 2. founder_profiles ───────────────────────────────────────────────
     op.create_table(
