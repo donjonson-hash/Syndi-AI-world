@@ -122,6 +122,7 @@ _profiles: Dict[str, FounderProfile] = {}
 # System (информация о версии перенесена на /api/info)
 # ═════════════════════════════════════════════════════════════════════════════
 
+@app.get("/")
 @app.get("/api/info")
 async def api_info():
     return {
@@ -349,7 +350,7 @@ async def find_matches(user_id: str, db: AsyncSession = Depends(get_db)):
         try:
             uid_int = int(user_id)
         except ValueError:
-            raise HTTPException(status_code=422, detail="user_id must be an integer")
+            raise HTTPException(status_code=404, detail="User not found")
         db_user = await crud.get_user_by_id(db, uid_int)
         if not db_user:
             raise HTTPException(status_code=404, detail="User not found")
