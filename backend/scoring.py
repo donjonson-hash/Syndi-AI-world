@@ -49,6 +49,8 @@ class FounderProfile(BaseModel):
 
 
 class ScoreBreakdown(BaseModel):
+    model_config = {"protected_namespaces": ()}
+
     intent_score: float
     role_score: float
     tempo_score: float
