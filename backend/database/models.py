@@ -45,6 +45,7 @@ class User(Base):
     ai_interpretation = Column(Text,     nullable=True)
 
     email      = Column(String(255), unique=True, nullable=True)
+    hashed_password = Column(String(255), nullable=True)
     is_active  = Column(Boolean, default=True, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_now, nullable=True)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=True)
