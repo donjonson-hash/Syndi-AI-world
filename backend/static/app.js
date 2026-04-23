@@ -177,8 +177,7 @@ async function submitTest() {
 async function loadMatches() {
   try {
     const data = await apiRequest(`/match/${state.currentUser.id}`);
-    // API возвращает List[MatchCard] (массив напрямую), не {matches:[]}
-    state.matches = Array.isArray(data) ? data : (data.matches || []);
+    state.matches = data.matches || [];
     renderMatches();
   } catch (error) {
     alert('Ошибка загрузки матчей: ' + error.message);
@@ -187,32 +186,23 @@ async function loadMatches() {
 
 function renderMatches() {
   const container = document.getElementById('matches-container');
-  if (!state.matches || state.matches.length === 0) {
+  if (state.matches.length === 0) {
     container.innerHTML = '<p>Пока нет подходящих кандидатов. Попробуй позже.</p>';
     return;
   }
-
-  container.innerHTML = state.matches.map(match => {
-    // Маппинг полей API ⇒ UI
-    // API: candidate_id, total_score, why_there_is_a_chance, risks
-    const candidateId  = match.candidate_id  || match.user_id || '?';
-    const score        = match.total_score   ?? match.compatibility_score ?? 0;
-    const why          = match.why_there_is_a_chance || match.why_text || '';
-    const riskFlags    = match.risks         || match.risk_flags || [];
-    const scoreDisplay = score <= 1 ? Math.round(score * 100) : Math.round(score);
-
-    return `
-    <div class="match-card" data-candidate-id="${candidateId}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <h3>Кандидат ${candidateId}</h3>
-        <div class="match-score">${scoreDisplay}%</div>
-      </div>
-      ${why ? `<p style="margin:8px 0;color:#475569"><em>✨ ${why}</em></p>` : ''}
-      ${riskFlags.length
-        ? `<div class="risk-flags">⚠️ ${riskFlags.map(f => f.replace(/_/g,' ')).join(' · ')}</div>`
-        : '<div style="color:#10b981;font-size:13px;margin-top:8px">✅ Нет риск-флагов</div>'}
-    </div>`;
-  }).join('');
+  
+  container.innerHTML = state.matches.map(match => `
+    <div class="match-card" data-candidate-id="${match.user_id}">
+      <h3>${match.name}</h3>
+      <div class="match-score">${Math.round(match.compatibility_score * 100)}%</div>
+      <p><strong>${match.role || 'Роль не указана'}</strong></p>
+      <p>${match.bio || ''}</p>
+      <div class="skills">${(match.skills || []).map(s => s.name).join(', ')}</div>
+      ${match.why_text ? `<p><em>${match.why_text}</em></p>` : ''}
+      ${match.risk_flags && match.risk_flags.length ? 
+        `<div class="risk-flags">⚠️ ${match.risk_flags.join(', ')}</div>` : ''}
+    </div>
+  `).join('');
 }
 
 function handleMatchAction(action) {
