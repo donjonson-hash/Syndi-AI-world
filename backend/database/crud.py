@@ -1,6 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from database.models import User
+from database.models import User, FounderProfileDB
 from typing import List, Dict, Any, Optional
 
 
@@ -85,3 +85,100 @@ async def create_big_five_result(db: AsyncSession, user_id: int,
                                   scores: Dict[str, Any]) -> Optional[User]:
     """Сохраняет Big Five профиль в поле psycho_profile пользователя."""
     return await update_user(db, user_id, {"psycho_profile": scores})
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FounderProfile CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def create_founder_profile(
+    db: AsyncSession,
+    user_id: int,
+    raw_answers: Dict[str, Any],
+    normalized_profile: Dict[str, Any],
+    schema_version: str = "syndiai-onboarding-schema-v0.1",
+) -> FounderProfileDB:
+    """Создаёт запись founder_profiles. Если для user_id уже есть — обновляет."""
+    existing = await get_founder_profile_by_user_id(db, user_id)
+    if existing:
+        existing.raw_answers = raw_answers
+        existing.normalized_profile = normalized_profile
+        existing.onboarding_schema_version = schema_version
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+    record = FounderProfileDB(
+        user_id=user_id,
+        raw_answers=raw_answers,
+        normalized_profile=normalized_profile,
+        onboarding_schema_version=schema_version,
+    )
+    db.add(record)
+    await db.commit()
+    await db.refresh(record)
+    return record
+
+
+async def get_founder_profile_by_user_id(
+    db: AsyncSession, user_id: int
+) -> Optional[FounderProfileDB]:
+    """Возвращает FounderProfileDB по user_id или None."""
+    result = await db.execute(
+        select(FounderProfileDB).where(FounderProfileDB.user_id == user_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_founder_profile_by_id(
+    db: AsyncSession, profile_id: str
+) -> Optional[FounderProfileDB]:
+    """Возвращает FounderProfileDB по UUID или None."""
+    result = await db.execute(
+        select(FounderProfileDB).where(FounderProfileDB.id == profile_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def list_founder_profiles(
+    db: AsyncSession,
+    limit: int = 100,
+    offset: int = 0,
+    active_only: bool = True,
+) -> List[FounderProfileDB]:
+    """Список всех профилей. active_only=True возвращает только is_active=True."""
+    query = select(FounderProfileDB)
+    if active_only:
+        query = query.where(FounderProfileDB.is_active.is_(True))
+    query = query.offset(offset).limit(limit)
+    result = await db.execute(query)
+    return result.scalars().all()
+
+
+async def list_founder_profiles_exclude(
+    db: AsyncSession,
+    exclude_user_id: int,
+    limit: int = 100,
+) -> List[FounderProfileDB]:
+    """Все активные профили кроме указанного user_id — для матчинга."""
+    result = await db.execute(
+        select(FounderProfileDB)
+        .where(
+            FounderProfileDB.user_id != exclude_user_id,
+            FounderProfileDB.is_active.is_(True),
+        )
+        .limit(limit)
+    )
+    return result.scalars().all()
+
+
+async def deactivate_founder_profile(
+    db: AsyncSession, user_id: int
+) -> bool:
+    """Помечает профиль как неактивный (soft delete)."""
+    record = await get_founder_profile_by_user_id(db, user_id)
+    if not record:
+        return False
+    record.is_active = False
+    await db.commit()
+    return True

@@ -1,51 +1,55 @@
+"""
+init_db.py — Инициализация БД и seed-данные.
+
+Запуск (из backend/):
+    source venv/bin/activate
+    python init_db.py
+
+Порядок действий:
+  1. alembic upgrade head  — применяет все миграции
+  2. Seed: создаёт тестовые профили основателей в founder_profiles
+  3. Выводит статус
+
+Для полноценного переноса данных запусти migrate_profiles.py.
+"""
 import asyncio
-from sqlalchemy import select
-from database.database import engine, AsyncSessionLocal, Base
-from database.models import User
-from database.crud import create_user, get_all_candidates
+import subprocess
+import sys
+from pathlib import Path
 
-# Данные наших героев из предыдущего чата
-mikhail_data = {
-    "name": "Mikhail",
-    "role": "Founder",
-    "skills": {"Python": 0.9, "Management": 0.8},
-    "psycho_profile": {"openness": 0.2, "conscientiousness": 0.9, "extraversion": 0.4, "agreeableness": 0.3, "neuroticism": 0.1},
-    "enneagram": {"type": 8, "wing": "8w7"}
-}
+sys.path.insert(0, str(Path(__file__).parent))
 
-michelle_data = {
-    "name": "Michelle",
-    "role": "Candidate",
-    "skills": {"Genetic Engineering": 0.95, "Lab Management": 0.8},
-    "psycho_profile": {"openness": 0.9, "conscientiousness": 0.7, "extraversion": 0.2, "agreeableness": 0.6, "neuroticism": 0.4},
-    "enneagram": {"type": 5, "wing": "5w4"} # В примере было 5 + 3, возьмем 5 как базу
-}
+from database.database import engine, init_db as _create_tables
+from migrate_profiles import seed_profiles, verify
 
-async def init_db():
-    # 1. Создаем таблицы
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
 
-    # 2. Открываем сессию
-    async with AsyncSessionLocal() as db:
-        print("🗄️ Создаем таблицы... OK")
-        
-        # Проверяем, есть ли уже Михаил, чтобы не дублировать
-        existing_mikhail = await db.execute(select(User).where(User.name == "Mikhail"))
-        if not existing_mikhail.scalar_one_or_none():
-            mikhail = await create_user(db, mikhail_data)
-            print(f"✅ Сохранен: {mikhail}")
-        else:
-            print("⚠️ Михаил уже существует")
+async def apply_migrations():
+    """Запускает alembic upgrade head."""
+    print("Applying migrations...")
+    result = subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd=Path(__file__).parent,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        print(f"✓ {result.stdout.strip() or 'up to date'}")
+    else:
+        print(f"⚠  alembic: {result.stderr.strip()}")
+        # Fallback: создаём таблицы напрямую через SQLAlchemy
+        print("  → fallback: create_all via SQLAlchemy")
+        await _create_tables()
 
-        existing_michelle = await db.execute(select(User).where(User.name == "Michelle"))
-        if not existing_michelle.scalar_one_or_none():
-            michelle = await create_user(db, michelle_data)
-            print(f"✅ Сохранена: {michelle}")
-        else:
-            print("⚠️ Мишель уже существует")
+
+async def main():
+    print("🚀 Syndi AI — DB initialization")
+    print("=" * 50)
+    await apply_migrations()
+    await seed_profiles()
+    await verify()
+    await engine.dispose()
+    print("\n✅ Done — startup_matcher.db is ready")
+
 
 if __name__ == "__main__":
-    print("🚀 Запуск инициализации Базы Данных...")
-    asyncio.run(init_db())
-    print("🏁 Финиш!")
+    asyncio.run(main())

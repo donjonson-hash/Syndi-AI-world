@@ -248,13 +248,28 @@ def _map_raw_to_normalizer(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.post("/api/v1/onboarding/raw")
-async def submit_raw_questionnaire(data: RawQuestionnaire):
-    """Принимает raw ответы анкеты фронтенда, нормализует, сохраняет профиль."""
+async def submit_raw_questionnaire(data: RawQuestionnaire, db: AsyncSession = Depends(get_db)):
+    """Принимает raw ответы анкеты фронтенда, нормализует, сохраняет в _profiles + БД."""
     raw = {k: v for k, v in data.model_dump().items() if v is not None}
     try:
         mapped = _map_raw_to_normalizer(raw)
         profile = normalize(mapped)
         _profiles[profile.user_id] = profile
+        # Сохраняем в БД: создаём/обновляем User + FounderProfileDB
+        db_user = await crud.get_user_by_name(db, profile.user_id)
+        if not db_user:
+            db_user = await crud.create_user(db, {
+                "name": profile.user_id,
+                "role": profile.role,
+                "skills": profile.skills,
+                "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
+            })
+        await crud.create_founder_profile(
+            db,
+            user_id=db_user.id,
+            raw_answers=raw,
+            normalized_profile=profile.model_dump(),
+        )
         return {
             "status": "success",
             "user_id": profile.user_id,
@@ -267,11 +282,26 @@ async def submit_raw_questionnaire(data: RawQuestionnaire):
 
 
 @app.post("/api/v1/onboarding/submit")
-async def submit_onboarding(payload: OnboardingSubmit):
-    """Принимает уже нормализованные данные, сохраняет профиль."""
+async def submit_onboarding(payload: OnboardingSubmit, db: AsyncSession = Depends(get_db)):
+    """Принимает уже нормализованные данные, сохраняет в _profiles + БД."""
     try:
         profile = normalize(payload.model_dump())
         _profiles[profile.user_id] = profile
+        # Сохраняем в БД
+        db_user = await crud.get_user_by_name(db, profile.user_id)
+        if not db_user:
+            db_user = await crud.create_user(db, {
+                "name": profile.user_id,
+                "role": profile.role,
+                "skills": profile.skills,
+                "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
+            })
+        await crud.create_founder_profile(
+            db,
+            user_id=db_user.id,
+            raw_answers=payload.model_dump(),
+            normalized_profile=profile.model_dump(),
+        )
         return {
             "status": "ok",
             "user_id": profile.user_id,
@@ -338,28 +368,54 @@ def _user_to_founder_profile(user) -> Optional[FounderProfile]:
 
 @app.get("/api/v1/match/{user_id}", response_model=List[MatchCard])
 async def find_matches(user_id: str, db: AsyncSession = Depends(get_db)):
-    """Топ-3 кандидата из _profiles (онбординг) или БД (если профиль в _profiles нет)."""
-    # Сначала ищем в in-memory (onboarding flow)
-    founder = _profiles.get(user_id)
+    """Топ-3 кандидата. Порядок поиска:
+    1. founder_profiles в БД (персистентно)
+    2. _profiles in-memory (fallback для тестов)
+    3. users в БД (легаси для числовых user_id)
+    """
+    founder: Optional[FounderProfile] = None
     candidates_fp: List[FounderProfile] = []
 
-    if founder:
-        candidates_fp = [p for uid, p in _profiles.items() if uid != user_id]
-    else:
-        # Фоллбэк: строим из БД
+    # ── 1. founder_profiles БД по имени ──────────────────────────────────────
+    db_user = await crud.get_user_by_name(db, user_id)
+    if db_user:
+        fp_record = await crud.get_founder_profile_by_user_id(db, db_user.id)
+        if fp_record:
+            try:
+                founder = FounderProfile(**fp_record.normalized_profile)
+            except Exception:
+                founder = _user_to_founder_profile(db_user)
+        else:
+            founder = _user_to_founder_profile(db_user)
+        fp_candidates = await crud.list_founder_profiles_exclude(db, exclude_user_id=db_user.id)
+        for fp in fp_candidates:
+            try:
+                candidates_fp.append(FounderProfile(**fp.normalized_profile))
+            except Exception:
+                continue
+
+    # ── 2. Fallback: _profiles in-memory ─────────────────────────────────────
+    if founder is None:
+        founder = _profiles.get(user_id)
+        if founder:
+            candidates_fp = [p for uid, p in _profiles.items() if uid != user_id]
+
+    # ── 3. Fallback: легаси по числовому user_id ──────────────────────────────
+    if founder is None:
         try:
             uid_int = int(user_id)
+            db_user_by_id = await crud.get_user_by_id(db, uid_int)
+            if db_user_by_id:
+                founder = _user_to_founder_profile(db_user_by_id)
+                if founder:
+                    db_candidates = await crud.get_all_candidates(db, exclude_user_id=uid_int)
+                    candidates_fp = [p for p in
+                                     (_user_to_founder_profile(u) for u in db_candidates) if p]
         except ValueError:
-            raise HTTPException(status_code=404, detail="User not found")
-        db_user = await crud.get_user_by_id(db, uid_int)
-        if not db_user:
-            raise HTTPException(status_code=404, detail="User not found")
-        founder = _user_to_founder_profile(db_user)
-        if not founder:
-            raise HTTPException(status_code=422, detail="Could not build profile from user data")
-        # Кандидаты: все другие пользователи из БД
-        db_candidates = await crud.get_all_candidates(db, exclude_user_id=uid_int)
-        candidates_fp = [p for p in (_user_to_founder_profile(u) for u in db_candidates) if p]
+            pass
+
+    if founder is None:
+        raise HTTPException(status_code=404, detail="User not found")
 
     if not candidates_fp:
         raise HTTPException(status_code=404,
