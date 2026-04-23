@@ -16,26 +16,17 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 from main import app, _profiles, _rate_store   # noqa: E402
 from database.database import engine            # noqa: E402
 from database.models import Base               # noqa: E402
-from sqlalchemy import text                    # noqa: E402
-
-
-@pytest_asyncio.fixture(autouse=True, scope="session")
-async def create_tables():
-    """Создаём все таблицы один раз для сессии тестов."""
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 @pytest_asyncio.fixture(autouse=True)
 async def clear_state():
-    """Очищаем in-memory + DB состояние перед каждым тестом."""
+    """Создаём таблицы если нет, очищаем данные + in-memory перед каждым тестом."""
     _profiles.clear()
     _rate_store.clear()
-    # Очищаем таблицы БД чтобы тесты были изолированы
     async with engine.begin() as conn:
+        # Создаём таблицы (безопасно если уже есть)
+        await conn.run_sync(Base.metadata.create_all)
+        # Очищаем данные для изоляции тестов
         for table in reversed(Base.metadata.sorted_tables):
             await conn.execute(table.delete())
     yield
