@@ -31,9 +31,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run core tests
-        run: pytest tests/ -v --tb=short \
-               --ignore=tests/test_agents.py \
-               -q
+        run: pytest tests/ -v --tb=short --ignore=tests/test_agents.py -q
 
   # ─────────────────────────────────────────────────────────────────────────────
   # optional — тесты агентов: ставит requirements-optional.txt поверх core
@@ -68,5 +66,5 @@ jobs:
 
       - name: Run agent tests
         env:
-          OPENAI_API_KEY: "sk-mock-key-for-tests"  # агенты используют MockLLMClient
+          OPENAI_API_KEY: "sk-mock-key-for-tests"
         run: pytest tests/test_agents.py -v --tb=short
