@@ -608,9 +608,9 @@ async def match_founder_legacy(founder_name: str, db: AsyncSession = Depends(get
 # ═════════════════════════════════════════════════════════════════════════════
 
 @app.post("/onboarding")
-async def legacy_onboarding(data: RawQuestionnaire):
+async def legacy_onboarding(data: RawQuestionnaire, db: AsyncSession = Depends(get_db)):
     """Alias: /onboarding -> /api/v1/onboarding/raw"""
-    return await submit_raw_questionnaire(data)
+    return await submit_raw_questionnaire(data, db)
 
 
 @app.get("/match/{user_id}", response_model=List[MatchCard])
