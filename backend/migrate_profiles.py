@@ -23,44 +23,70 @@ sys.path.insert(0, str(Path(__file__).parent))
 from database.database import AsyncSessionLocal, engine, init_db
 from database import crud
 from questionnaire_normalizer import normalize, ONBOARDING_SCHEMA_VERSION
+from main import _map_raw_to_normalizer  # noqa: E402
 
-# ─── Seed-профили (те же что тестирует test_api_integration.py) ───────────────
+# ─── Seed-профили в questionnaire-формате (совпадают с conftest.py fixtures) ──
 SEED_PROFILES = [
     {
         "user_id": "founder_builder",
-        "intent_goal": "build_product",
-        "role": "builder",
-        "skills": ["python", "fastapi", "system_design"],
         "time_commitment": "full_time",
-        "salary_readiness_months": 6,
-        "launched_projects": 2,
-        "sync_preference": "daily",
-        "accountability_score": 85,
-        "self_driven_actions": ["built_mvp", "found_first_users"],
+        "no_salary_readiness": "12_months",
+        "intent_goal": "build_company",
+        "launched_projects": "3+",
+        "self_actions": ["built_mvp", "shipped_product", "wrote_code", "managed_team"],
+        "primary_role": "builder",
+        "no_go_role_tags": [],
+        "decision_style": "analyze_first",
+        "conflict_style": "calm_discussion",
+        "work_mode": "tight_pair",
+        "tempo": "iterate_fast",
+        "sync_frequency": "daily",
+        "accountability_disappear_label": "never",
+        "accountability_ownership_label": "always",
+        "big5_o_1": 4, "big5_o_2": 4,
+        "big5_c_1": 5, "big5_c_2": 5, "big5_c_3": 4,
+        "big5_e_1": 3, "big5_e_2": 2,
+        "big5_a_1": 4, "big5_a_2": 4,
+        "big5_es_1": 4, "big5_es_2": 4,
     },
     {
         "user_id": "founder_seller",
-        "intent_goal": "find_market",
-        "role": "seller",
-        "skills": ["sales", "marketing", "partnerships"],
         "time_commitment": "full_time",
-        "salary_readiness_months": 3,
-        "launched_projects": 1,
-        "sync_preference": "daily",
-        "accountability_score": 80,
-        "self_driven_actions": ["closed_first_deal", "built_pipeline"],
+        "no_salary_readiness": "12_months",
+        "intent_goal": "build_company",
+        "launched_projects": "1-2",
+        "self_actions": ["sold_to_customers", "grew_revenue", "found_investors"],
+        "primary_role": "seller",
+        "no_go_role_tags": [],
+        "decision_style": "fast_risky",
+        "conflict_style": "calm_discussion",
+        "work_mode": "tight_pair",
+        "tempo": "iterate_fast",
+        "sync_frequency": "daily",
+        "accountability_disappear_label": "rarely",
+        "accountability_ownership_label": "always",
+        "big5_o_1": 4, "big5_o_2": 5,
+        "big5_c_1": 4, "big5_c_2": 4, "big5_c_3": 5,
+        "big5_e_1": 5, "big5_e_2": 5,
+        "big5_a_1": 4, "big5_a_2": 4,
+        "big5_es_1": 4, "big5_es_2": 5,
     },
     {
         "user_id": "founder_operator",
-        "intent_goal": "scale_operations",
-        "role": "operator",
-        "skills": ["operations", "hiring", "finance"],
         "time_commitment": "full_time",
-        "salary_readiness_months": 6,
-        "launched_projects": 3,
-        "sync_preference": "weekly",
-        "accountability_score": 90,
-        "self_driven_actions": ["built_processes", "hired_team"],
+        "no_salary_readiness": "12_months",
+        "intent_goal": "build_company",
+        "launched_projects": "1-2",
+        "self_actions": ["managed_team", "built_processes"],
+        "primary_role": "operator",
+        "no_go_role_tags": [],
+        "decision_style": "discuss_first",
+        "conflict_style": "calm_discussion",
+        "work_mode": "team",
+        "tempo": "build_right_first",
+        "sync_frequency": "twice_a_week",
+        "accountability_disappear_label": "never",
+        "accountability_ownership_label": "usually",
     },
 ]
 
@@ -85,7 +111,7 @@ async def run_migration():
 
 async def seed_profiles():
     """Создаёт User + FounderProfileDB для каждого seed-профиля."""
-    print("\n═" * 60)
+    print("\n" + "═" * 60)
     print("Step 2: seeding founder_profiles")
     print("═" * 60)
 
@@ -100,8 +126,9 @@ async def seed_profiles():
         for raw in SEED_PROFILES:
             user_id_str = raw["user_id"]
             try:
-                # Нормализуем профиль
-                profile = normalize(raw)
+                # Маппим questionnaire-формат → формат normalize()
+                mapped = _map_raw_to_normalizer(raw)
+                profile = normalize(mapped)
 
                 # Создаём или получаем User
                 db_user = await crud.get_user_by_name(db, user_id_str)
@@ -145,7 +172,7 @@ async def seed_profiles():
 
 async def verify():
     """Проверяет что записи действительно сохранились."""
-    print("\n═" * 60)
+    print("\n" + "═" * 60)
     print("Step 3: verification")
     print("═" * 60)
     async with AsyncSessionLocal() as db:
