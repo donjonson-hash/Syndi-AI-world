@@ -251,11 +251,18 @@ def _map_raw_to_normalizer(raw: Dict[str, Any]) -> Dict[str, Any]:
 async def submit_raw_questionnaire(data: RawQuestionnaire, db: AsyncSession = Depends(get_db)):
     """Принимает raw ответы анкеты фронтенда, нормализует, сохраняет в _profiles + БД."""
     raw = {k: v for k, v in data.model_dump().items() if v is not None}
+    # Нормализация — 422 если данные невалидные
     try:
         mapped = _map_raw_to_normalizer(raw)
         profile = normalize(mapped)
-        _profiles[profile.user_id] = profile
-        # Сохраняем в БД: создаём/обновляем User + FounderProfileDB
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    # Сохраняем в памяти (всегда)
+    _profiles[profile.user_id] = profile
+
+    # Сохраняем в БД (best-effort — не ломаем onboarding если БД недоступна)
+    try:
         db_user = await crud.get_user_by_name(db, profile.user_id)
         if not db_user:
             db_user = await crud.create_user(db, {
@@ -270,15 +277,16 @@ async def submit_raw_questionnaire(data: RawQuestionnaire, db: AsyncSession = De
             raw_answers=raw,
             normalized_profile=profile.model_dump(),
         )
-        return {
-            "status": "success",
-            "user_id": profile.user_id,
-            "intent": profile.intent_goal,
-            "normalized_profile": profile.model_dump(),
-            "schema_version": ONBOARDING_SCHEMA_VERSION,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as db_err:
+        logger.warning(f"DB persist skipped for {profile.user_id}: {db_err}")
+
+    return {
+        "status": "success",
+        "user_id": profile.user_id,
+        "intent": profile.intent_goal,
+        "normalized_profile": profile.model_dump(),
+        "schema_version": ONBOARDING_SCHEMA_VERSION,
+    }
 
 
 @app.post("/api/v1/onboarding/submit")
@@ -286,8 +294,12 @@ async def submit_onboarding(payload: OnboardingSubmit, db: AsyncSession = Depend
     """Принимает уже нормализованные данные, сохраняет в _profiles + БД."""
     try:
         profile = normalize(payload.model_dump())
-        _profiles[profile.user_id] = profile
-        # Сохраняем в БД
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    _profiles[profile.user_id] = profile
+
+    try:
         db_user = await crud.get_user_by_name(db, profile.user_id)
         if not db_user:
             db_user = await crud.create_user(db, {
@@ -302,14 +314,15 @@ async def submit_onboarding(payload: OnboardingSubmit, db: AsyncSession = Depend
             raw_answers=payload.model_dump(),
             normalized_profile=profile.model_dump(),
         )
-        return {
-            "status": "ok",
-            "user_id": profile.user_id,
-            "normalized_profile": profile.model_dump(),
-            "schema_version": ONBOARDING_SCHEMA_VERSION,
-        }
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as db_err:
+        logger.warning(f"DB persist skipped for {profile.user_id}: {db_err}")
+
+    return {
+        "status": "ok",
+        "user_id": profile.user_id,
+        "normalized_profile": profile.model_dump(),
+        "schema_version": ONBOARDING_SCHEMA_VERSION,
+    }
 
 
 # ═════════════════════════════════════════════════════════════════════════════
