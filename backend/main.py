@@ -662,7 +662,8 @@ async def legacy_list_agents():
 # ═════════════════════════════════════════════════════════════════════════════
 
 # Папка static должна существовать с файлами index.html, style.css, app.js
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+_static_dir = Path(__file__).parent / "static"
+app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
