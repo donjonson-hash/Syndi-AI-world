@@ -31,6 +31,7 @@ import uvicorn
 sys.path.insert(0, str(Path(__file__).parent))
 
 from database.database import get_db, init_db, close_db
+from database.redis_client import close_redis
 from database import crud
 from models.big_five import BigFiveTest, TestSubmission
 from models.user import UserCreate
@@ -56,6 +57,7 @@ async def lifespan(app: FastAPI):
     logger.info(f"Database ready | Scoring: {SCORING_MODEL_VERSION} | Schema: {ONBOARDING_SCHEMA_VERSION}")
     yield
     await close_db()
+    await close_redis()
 
 
 app = FastAPI(

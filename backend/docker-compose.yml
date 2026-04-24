@@ -9,11 +9,16 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://syndi:syndi@postgres:5432/syndi_db
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - MIMO_API_KEY=${MIMO_API_KEY:-}
+      - SECRET_KEY=${SECRET_KEY:-syndi-secret-key-change-in-prod}
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://localhost:8080}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -30,6 +35,17 @@ services:
       - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U syndi -d syndi_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5

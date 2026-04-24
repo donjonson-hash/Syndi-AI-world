@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.database import get_db
 from database import crud
 from database.models import LikeDB, User as UserDB
+from database.redis_client import cache_get, cache_set
 from auth import get_current_user
 from scoring import FounderProfile, score_pair, ScoreBreakdown
 from sqlalchemy import select
@@ -95,7 +96,18 @@ async def get_discover(
     - Фильтрует уже лайкнутых/дизлайкнутых (те кому уже свайпнул)
     - Считает score_pair для каждого
     - Возвращает топ-{limit} по total_score
+
+    Кэш: результат кэшируется в Redis на 60 секунд (ключ discover:{user_id}:{limit}).
+    Если Redis недоступен — работает без кэша (graceful degradation).
     """
+    cache_key = f"discover:{user_id}:{limit}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        try:
+            return DiscoverResponse(**cached)
+        except Exception:
+            pass  # битый кэш — пересчитаем
+
     # Проверяем что пользователь существует
     user = await crud.get_user_by_id(db, user_id)
     if not user:
@@ -157,9 +169,17 @@ async def get_discover(
     scored.sort(key=lambda x: x[0], reverse=True)
     top_cards = [card for _, card in scored[:limit]]
 
-    return DiscoverResponse(
+    response = DiscoverResponse(
         user_id=user_id,
         cards=top_cards,
         total=len(top_cards),
         filtered_already_seen=filtered_count,
     )
+
+    # Кэшируем на 60 секунд (best-effort, молча игнорируем если Redis недоступен)
+    try:
+        await cache_set(cache_key, response.model_dump(), ttl=60)
+    except Exception:
+        pass
+
+    return response
