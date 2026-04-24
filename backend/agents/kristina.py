@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 
 from .base import AgentRole, AgentResponse, MessageType, get_llm_client
 from services.llm import get_llm_service
+from avatar_platform.emotional_core import EmotionalCore
 
 
 class KristinaUXDesigner:
@@ -35,6 +36,7 @@ class KristinaUXDesigner:
         self.total_conversations = 0
         self.llm_client = get_llm_client()
         self.llm_service = get_llm_service()
+        self.emotional_core = EmotionalCore()
 
     def get_memory(self, user_id: str):
         if user_id not in self.memories:
@@ -121,6 +123,14 @@ class KristinaUXDesigner:
 
         msg_type = self._detect_message_type(message)
 
+        msg_lower = message.lower()
+        tone_context = {
+            "positive_tone": "хорошо" in msg_lower,
+            "complex_question": "?" in message,
+            "negative_tone": any(w in msg_lower for w in ["плохо", "не работает", "проблема"]),
+        }
+        emotional_state = self.emotional_core.evolve(context=tone_context)
+
         content: str = ""
         if self.llm_service is not None and getattr(self.llm_service, "api_key", ""):
             try:
@@ -132,9 +142,10 @@ class KristinaUXDesigner:
                     for m in history
                     if m.get("role") in ("user", "assistant")
                 ]
+                system_prompt = f"{self.system_prompt}\n{emotional_state['llm_style_hint']}"
                 content = await self.llm_service.generate_response(
                     prompt=message,
-                    system_prompt=self.system_prompt,
+                    system_prompt=system_prompt,
                     context=llm_context,
                 ) or ""
             except Exception:
@@ -155,6 +166,10 @@ class KristinaUXDesigner:
                 {"type": "suggest", "label": "Получить совет", "payload": "advice"},
                 {"type": "share", "label": "Поделиться", "payload": "share"},
             ],
+            metadata={
+                "mood_description": emotional_state["mood_description"],
+                "dominant_emotion": emotional_state["dominant_emotion"],
+            },
         )
 
         memory.add_message("assistant", content)
