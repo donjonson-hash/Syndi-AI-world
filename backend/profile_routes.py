@@ -15,6 +15,7 @@ from database.database import get_db
 from database import crud
 from database.models import User as UserDB
 from auth import get_current_user
+from avatar_platform.profession_profile import get_profession
 
 
 profile_router = APIRouter(prefix="/profile", tags=["profile"])
@@ -42,19 +43,35 @@ class ProfileResponse(BaseModel):
     risk_flags: Optional[Any] = None
     mbti_type: Optional[str] = None
     created_at: Optional[str] = None
+    profession: Optional[Dict[str, Any]] = None
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
+def _profession_dict(role: Optional[str]) -> Optional[Dict[str, Any]]:
+    if not role:
+        return None
+    p = get_profession(str(role))
+    if not p:
+        return None
+    return {
+        "title": p.title,
+        "core_skills": p.core_skills,
+        "routine_tasks": p.routine_tasks,
+    }
+
+
 def _build_response(user: UserDB, profile) -> ProfileResponse:
     """Формирует ProfileResponse из UserDB + (optional) FounderProfileDB."""
     if profile is None:
+        user_role = str(user.role) if user.role else None
         return ProfileResponse(
             id=None,
             user_id=user.id,
             email=user.email,
             name=user.name,
-            primary_role=str(user.role) if user.role else None,
+            primary_role=user_role,
+            profession=_profession_dict(user_role),
         )
 
     np: Dict[str, Any] = profile.normalized_profile or {}
@@ -83,6 +100,7 @@ def _build_response(user: UserDB, profile) -> ProfileResponse:
         risk_flags=np.get("risk_flags") or ra.get("risk_flags"),
         mbti_type=np.get("mbti_type") or ra.get("mbti_type"),
         created_at=created_at,
+        profession=_profession_dict(primary_role),
     )
 
 
