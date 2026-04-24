@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
 from database import crud
-from database.models import LikeDB
+from database.models import LikeDB, User as UserDB
+from auth import get_current_user
 from scoring import FounderProfile, score_pair, ScoreBreakdown
 from sqlalchemy import select
 
@@ -85,6 +86,7 @@ async def get_discover(
     user_id: int = Query(..., description="ID текущего пользователя"),
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT, description="Кол-во карточек"),
     db: AsyncSession = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
     """
     Tinder-лента: карточки кандидатов, отсортированные по FounderFit score.

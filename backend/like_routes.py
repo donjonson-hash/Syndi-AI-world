@@ -15,6 +15,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
 from database import crud
+from database.models import User as UserDB
+from auth import get_current_user
 from scoring import score_pair, FounderProfile
 
 like_router = APIRouter(tags=["likes"])
@@ -91,6 +93,7 @@ async def post_like(
     to_user_id: int,
     body: LikeRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
     """
     Поставить лайк (is_like=true) или дизлайк (is_like=false).
@@ -146,6 +149,7 @@ async def post_like(
 async def get_matches(
     user_id: int,
     db: AsyncSession = Depends(get_db),
+    current_user: UserDB = Depends(get_current_user),
 ):
     """
     Список взаимных матчей пользователя.

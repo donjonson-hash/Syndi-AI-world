@@ -5,6 +5,7 @@ POST /api/v1/like/{to_user_id}
 GET  /api/v1/matches?user_id={id}
 """
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
 
 
@@ -58,6 +59,34 @@ async def _create_user(client: AsyncClient, tag: str, role: str = "builder") -> 
     })
     assert resp.status_code == 200, f"create_user failed ({tag}): {resp.text}"
     return resp.json()
+
+
+async def _get_token(client: AsyncClient, email: str, password: str = "TestPass123!") -> str:
+    """Регистрирует пользователя через /api/v1/auth/register и возвращает JWT-токен."""
+    resp = await client.post("/api/v1/auth/register", json={
+        "email": email, "password": password,
+    })
+    assert resp.status_code == 200, f"register failed: {resp.text}"
+    return resp.json()["token"]
+
+
+async def _auth_header(client: AsyncClient, tag: str = "auth") -> dict:
+    """Возвращает headers с валидным Bearer-токеном для произвольного пользователя."""
+    token = await _get_token(client, f"{tag}_auth@test.syndi")
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _authenticate_client(client: AsyncClient):
+    """Регистрирует служебного пользователя и проставляет Bearer-токен в client.headers.
+
+    Все эндпоинты /api/v1/like и /api/v1/matches требуют JWT; этот autouse-фикстур
+    избавляет от необходимости прописывать заголовок в каждом вызове.
+    """
+    token = await _get_token(client, "like_match_fixture@test.syndi")
+    client.headers["Authorization"] = f"Bearer {token}"
+    yield
+    client.headers.pop("Authorization", None)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

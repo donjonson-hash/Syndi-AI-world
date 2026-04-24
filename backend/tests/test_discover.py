@@ -2,7 +2,29 @@
 test_discover.py — интеграционные тесты GET /api/v1/discover
 """
 import pytest
+import pytest_asyncio
 from httpx import AsyncClient
+
+
+async def _get_token(client: AsyncClient, email: str, password: str = "TestPass123!") -> str:
+    resp = await client.post("/api/v1/auth/register", json={
+        "email": email, "password": password,
+    })
+    assert resp.status_code == 200, f"register failed: {resp.text}"
+    return resp.json()["token"]
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _authenticate_client(client: AsyncClient):
+    """Регистрирует служебного пользователя и проставляет Bearer-токен в client.headers.
+
+    Эндпоинт /api/v1/discover требует JWT; autouse-фикстур проставляет
+    валидный заголовок для всех тестов.
+    """
+    token = await _get_token(client, "discover_fixture@test.syndi")
+    client.headers["Authorization"] = f"Bearer {token}"
+    yield
+    client.headers.pop("Authorization", None)
 
 # ─── Fixtures helpers ────────────────────────────────────────────────────────
 
