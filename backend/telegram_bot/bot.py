@@ -9,9 +9,12 @@ import asyncio
 import logging
 from typing import Optional
 
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Загрузить .env из backend/ независимо от CWD
+_env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=_env_path)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
