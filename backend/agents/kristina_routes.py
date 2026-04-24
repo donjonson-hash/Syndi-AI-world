@@ -10,9 +10,11 @@ from typing import Optional, List, Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.kristina import KristinaUXDesigner
 from auth import get_current_user
+from database.database import get_db
 from database.models import User as UserDB
 
 
@@ -75,6 +77,7 @@ async def kristina_status():
 async def chat_with_kristina(
     payload: ChatRequest,
     current_user: UserDB = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     session_id = payload.session_id or str(current_user.id)
 
@@ -99,6 +102,21 @@ async def chat_with_kristina(
         suggestions = []
         msg_type = "text"
 
+    # Сохраняем в PersistentMemory — не роняем чат при ошибке БД.
+    try:
+        await kristina.memory_manager.persistent.save_message(
+            db, current_user.id, session_id,
+            role="user", content=payload.message,
+            memory_type="dialog", agent_mode=mode,
+        )
+        await kristina.memory_manager.persistent.save_message(
+            db, current_user.id, session_id,
+            role="assistant", content=content,
+            memory_type="dialog", agent_mode=mode, mood=mood,
+        )
+    except Exception:
+        pass
+
     return ChatResponse(
         response=content,
         agent="kristina",
@@ -114,8 +132,25 @@ async def chat_with_kristina(
 async def kristina_history(
     session_id: Optional[str] = None,
     current_user: UserDB = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     sid = session_id or str(current_user.id)
+
+    # Если есть записи в PersistentMemory — возвращаем из БД.
+    try:
+        db_rows = await kristina.memory_manager.persistent.get_history(
+            db, current_user.id, session_id=sid, limit=50,
+        )
+    except Exception:
+        db_rows = []
+
+    if db_rows:
+        return HistoryResponse(
+            session_id=sid,
+            messages=db_rows,
+            total=len(db_rows),
+        )
+
     memory = kristina.get_memory(sid)
     messages = list(memory.messages)
     return HistoryResponse(

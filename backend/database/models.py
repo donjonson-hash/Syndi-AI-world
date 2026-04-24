@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey,
-    Index, Integer, String, Text, JSON
+    Index, Integer, String, Text, JSON, func
 )
 from sqlalchemy.orm import relationship
 from database.database import Base
@@ -271,4 +271,27 @@ class MatchDB(Base):
         Index("ix_matches_user_a", "user_a_id"),
         Index("ix_matches_user_b", "user_b_id"),
         Index("ix_matches_status", "status"),
+    )
+
+# ─────────────────────────────────────────────────────────────────────────────
+# avatar_memories — долгосрочная память аватара (D5)
+# ─────────────────────────────────────────────────────────────────────────────
+class AvatarMemoryDB(Base):
+    """Долгосрочная память аватара — факты, диалоги, контекст."""
+    __tablename__ = "avatar_memories"
+
+    id           = Column(Integer, primary_key=True, index=True)
+    user_id      = Column(Integer, index=True, nullable=False)
+    session_id   = Column(String, index=True, nullable=False)
+    memory_type  = Column(String(20), nullable=False)  # "dialog" | "fact" | "context"
+    role         = Column(String(10), nullable=False)   # "user" | "assistant" | "system"
+    content      = Column(Text, nullable=False)
+    tags         = Column(Text, nullable=True)           # JSON: ["project", "conflict", ...]
+    agent_mode   = Column(String(20), nullable=True)     # "advisor" | "mentor" | "executor"
+    mood         = Column(String(100), nullable=True)
+    created_at   = Column(DateTime, default=func.now())
+
+    __table_args__ = (
+        Index("ix_avatar_mem_user",    "user_id"),
+        Index("ix_avatar_mem_session", "session_id"),
     )

@@ -13,6 +13,7 @@ from .base import AgentRole, AgentResponse, MessageType, get_llm_client
 from services.llm import get_llm_service
 from avatar_platform.emotional_core import EmotionalCore
 from avatar_platform.agent_router import detect_mode, AgentMode
+from avatar_platform.memory.memory_manager import MemoryManager
 
 
 class KristinaUXDesigner:
@@ -38,6 +39,7 @@ class KristinaUXDesigner:
         self.llm_client = get_llm_client()
         self.llm_service = get_llm_service()
         self.emotional_core = EmotionalCore()
+        self.memory_manager = MemoryManager()
 
     def get_memory(self, user_id: str):
         if user_id not in self.memories:
@@ -155,6 +157,17 @@ class KristinaUXDesigner:
         memory = self.get_memory(user_id)
         memory.add_message("user", message)
 
+        session_id = user_id
+        mm_user_id = int(user_id) if isinstance(user_id, str) and user_id.isdigit() else 0
+
+        self.memory_manager.dialog.add_message(session_id, "user", message)
+
+        msg_lower_start = message.strip().lower()
+        if msg_lower_start.startswith("меня зовут ") or msg_lower_start.startswith("я "):
+            self.memory_manager.semantic.add_fact(
+                mm_user_id, message.strip(), category="self_intro",
+            )
+
         msg_type = self._detect_message_type(message)
 
         routing = detect_mode(message)
@@ -170,15 +183,15 @@ class KristinaUXDesigner:
         content: str = ""
         if self.llm_service is not None and getattr(self.llm_service, "api_key", ""):
             try:
-                # Берём последние 10 сообщений как контекст (исключая только что добавленное
-                # user-сообщение — оно передаётся как `prompt`).
-                history = memory.get_context(10)[:-1]
-                llm_context = [
-                    {"role": m["role"], "content": m["content"]}
-                    for m in history
-                    if m.get("role") in ("user", "assistant")
-                ]
+                llm_context, facts_summary = self.memory_manager.build_llm_context(
+                    user_id=mm_user_id, session_id=session_id, last_n=8,
+                )
+                # Исключаем только что добавленное user-сообщение — оно передаётся как prompt.
+                if llm_context and llm_context[-1].get("role") == "user":
+                    llm_context = llm_context[:-1]
                 system_prompt = f"{routing.system_prompt}\n{emotional_state['llm_style_hint']}"
+                if facts_summary:
+                    system_prompt = f"{system_prompt}\n{facts_summary}"
                 content = await self.llm_service.generate_response(
                     prompt=message,
                     system_prompt=system_prompt,
@@ -191,7 +204,6 @@ class KristinaUXDesigner:
             fb_content, suggestions = self._fallback_reply(message, mode=routing.mode)
             content = fb_content
         else:
-            # Для LLM-ответа suggestions генерируем по keyword (чтобы UI не терял кнопки).
             _, suggestions = self._fallback_reply(message, mode=routing.mode)
 
         response = AgentResponse(
@@ -210,5 +222,10 @@ class KristinaUXDesigner:
         )
 
         memory.add_message("assistant", content)
+        self.memory_manager.dialog.add_message(
+            session_id, "assistant", content,
+            agent_mode=routing.mode.value,
+            mood=emotional_state.get("mood_description"),
+        )
         self.total_conversations += 1
         return response

@@ -21,6 +21,7 @@ from database.models import (  # noqa: E402  — импорт после sys.pat
     TrialDB,
     TrialTaskDB,
     TrialEventDB,
+    AvatarMemoryDB,
 )
 
 config = context.config
