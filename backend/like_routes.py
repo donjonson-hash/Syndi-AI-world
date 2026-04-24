@@ -8,6 +8,7 @@ Endpoints:
   POST /api/v1/like/{to_user_id}   — поставить лайк/дизлайк
   GET  /api/v1/matches             — список взаимных матчей текущего пользователя
 """
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -18,6 +19,9 @@ from database import crud
 from database.models import User as UserDB
 from auth import get_current_user
 from scoring import score_pair, FounderProfile
+from avatar_platform.avatar_factory import AvatarFactory
+
+logger = logging.getLogger(__name__)
 
 like_router = APIRouter(tags=["likes"])
 
@@ -133,6 +137,31 @@ async def post_like(
             match_db = await crud.create_match(db, from_user_id, to_user_id, match_score)
             is_match = True
             match_id = match_db.id
+
+            # D4: создание AI-аватаров для обоих со-фаундеров при матче
+            try:
+                from_profile = await crud.get_founder_profile_by_user_id(db, from_user_id)
+                if from_profile:
+                    norm = from_profile.normalized_profile or {}
+                    AvatarFactory.create_avatar(
+                        user_id=from_user_id,
+                        founder_name=norm.get("name", from_user.name or f"Founder {from_user_id}"),
+                        role_id=str(norm.get("primary_role", "builder")),
+                        match_id=match_db.id,
+                        partner_user_id=to_user_id,
+                    )
+                to_profile = await crud.get_founder_profile_by_user_id(db, to_user_id)
+                if to_profile:
+                    norm = to_profile.normalized_profile or {}
+                    AvatarFactory.create_avatar(
+                        user_id=to_user_id,
+                        founder_name=norm.get("name", to_user.name or f"Founder {to_user_id}"),
+                        role_id=str(norm.get("primary_role", "builder")),
+                        match_id=match_db.id,
+                        partner_user_id=from_user_id,
+                    )
+            except Exception as e:
+                logger.warning(f"Avatar creation failed: {e}")
 
     return LikeResponse(
         like_id=like.id,
