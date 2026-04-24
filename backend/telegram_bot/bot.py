@@ -230,6 +230,9 @@ async def callback_query_handler(update, context):
 
 # ─── Main ────────────────────────────────────────────────────────────────────
 
+PROXY_URL = os.getenv("HTTPS_PROXY", os.getenv("https_proxy", ""))
+
+
 def build_application(token: str):
     """Собрать Application с хендлерами. Импорт telegram — внутри функции."""
     from telegram.ext import (
@@ -239,7 +242,13 @@ def build_application(token: str):
         CallbackQueryHandler,
         filters,
     )
-    app = Application.builder().token(token).build()
+    builder = Application.builder().token(token)
+    if PROXY_URL:
+        from telegram.request import HTTPXRequest
+        request = HTTPXRequest(proxy=PROXY_URL)
+        builder = builder.request(request)
+        logger.info(f"Using proxy: {PROXY_URL}")
+    app = builder.build()
 
     app.add_handler(CommandHandler("start", start_handler))
     app.add_handler(CommandHandler("help", help_handler))
