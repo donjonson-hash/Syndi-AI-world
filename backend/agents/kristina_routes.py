@@ -40,6 +40,7 @@ class ChatResponse(BaseModel):
     suggestions: List[str] = []
     message_type: str = "text"
     mood: Optional[str] = None  # mood_description из EmotionalCore
+    mode: Optional[str] = None  # "advisor" | "mentor" | "executor"
 
 
 class StatusResponse(BaseModel):
@@ -78,6 +79,7 @@ async def chat_with_kristina(
     session_id = payload.session_id or str(current_user.id)
 
     mood: Optional[str] = None
+    mode: Optional[str] = None
     try:
         agent_resp = await kristina.process_message(session_id, payload.message)
         content = agent_resp.content
@@ -89,6 +91,7 @@ async def chat_with_kristina(
         )
         if agent_resp.metadata:
             mood = agent_resp.metadata.get("mood_description")
+            mode = agent_resp.metadata.get("mode")
         if not isinstance(content, str) or not content.strip():
             content = FALLBACK_REPLY
     except Exception:
@@ -103,6 +106,7 @@ async def chat_with_kristina(
         suggestions=suggestions,
         message_type=msg_type,
         mood=mood,
+        mode=mode,
     )
 
 

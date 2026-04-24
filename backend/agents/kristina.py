@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from .base import AgentRole, AgentResponse, MessageType, get_llm_client
 from services.llm import get_llm_service
 from avatar_platform.emotional_core import EmotionalCore
+from avatar_platform.agent_router import detect_mode, AgentMode
 
 
 class KristinaUXDesigner:
@@ -67,9 +68,42 @@ class KristinaUXDesigner:
             return MessageType.ADVICE
         return MessageType.TEXT
 
-    def _fallback_reply(self, message: str):
-        """Keyword-логика. Возвращает (content, suggestions)."""
+    def _fallback_reply(self, message: str, mode: Optional[AgentMode] = None):
+        """Keyword-логика. Возвращает (content, suggestions).
+
+        Если передан `mode`, сначала проверяется режим-специфичный шаблон
+        (EXECUTOR / MENTOR), затем классическая keyword-логика для ADVISOR.
+        """
         prompt_lower = message.lower()
+
+        if mode == AgentMode.EXECUTOR and any(
+            kw in prompt_lower for kw in ("напиши", "составь", "сделай", "подготовь", "создай")
+        ):
+            return (
+                "Вот готовый шаблон — используй и адаптируй под задачу:\n"
+                "1. Контекст\n"
+                "2. Цель\n"
+                "3. Шаги\n"
+                "4. Критерии готовности",
+                [
+                    "Нужен другой формат?",
+                    "Добавить детали",
+                    "Сделать чеклист",
+                ],
+            )
+
+        if mode == AgentMode.MENTOR and any(
+            kw in prompt_lower for kw in ("конфликт", "проблема", "сложно", "устал", "боюсь")
+        ):
+            return (
+                "Понимаю, это непросто. Расскажи подробнее — что именно происходит "
+                "и как ты сейчас себя чувствуешь? Разберёмся вместе.",
+                [
+                    "Как начать разговор?",
+                    "Что сказать партнёру?",
+                    "Как снизить напряжение?",
+                ],
+            )
 
         if "исследование" in prompt_lower or "research" in prompt_lower:
             return (
@@ -123,6 +157,8 @@ class KristinaUXDesigner:
 
         msg_type = self._detect_message_type(message)
 
+        routing = detect_mode(message)
+
         msg_lower = message.lower()
         tone_context = {
             "positive_tone": "хорошо" in msg_lower,
@@ -142,7 +178,7 @@ class KristinaUXDesigner:
                     for m in history
                     if m.get("role") in ("user", "assistant")
                 ]
-                system_prompt = f"{self.system_prompt}\n{emotional_state['llm_style_hint']}"
+                system_prompt = f"{routing.system_prompt}\n{emotional_state['llm_style_hint']}"
                 content = await self.llm_service.generate_response(
                     prompt=message,
                     system_prompt=system_prompt,
@@ -152,11 +188,11 @@ class KristinaUXDesigner:
                 content = ""
 
         if not isinstance(content, str) or not content.strip():
-            fb_content, suggestions = self._fallback_reply(message)
+            fb_content, suggestions = self._fallback_reply(message, mode=routing.mode)
             content = fb_content
         else:
             # Для LLM-ответа suggestions генерируем по keyword (чтобы UI не терял кнопки).
-            _, suggestions = self._fallback_reply(message)
+            _, suggestions = self._fallback_reply(message, mode=routing.mode)
 
         response = AgentResponse(
             content=content,
@@ -169,6 +205,7 @@ class KristinaUXDesigner:
             metadata={
                 "mood_description": emotional_state["mood_description"],
                 "dominant_emotion": emotional_state["dominant_emotion"],
+                "mode": routing.mode.value,
             },
         )
 
