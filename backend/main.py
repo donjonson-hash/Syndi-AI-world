@@ -41,6 +41,7 @@ from agents.kristina_routes import router as kristina_router
 from like_routes import like_router
 from discover_routes import discover_router
 from auth_routes import auth_router
+from profile_routes import profile_router
 
 logger = logging.getLogger(__name__)
 
@@ -561,6 +562,7 @@ async def submit_test(submission: TestSubmission, db: AsyncSession = Depends(get
 app.include_router(like_router, prefix="/api/v1")
 app.include_router(discover_router, prefix="/api/v1")
 app.include_router(auth_router, prefix="/api/v1")
+app.include_router(profile_router, prefix="/api/v1")
 app.include_router(kristina_router)
 
 

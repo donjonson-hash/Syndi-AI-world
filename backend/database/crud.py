@@ -292,3 +292,34 @@ async def list_matches_for_user(
         query = query.where(MatchDB.status == "active")
     result = await db.execute(query)
     return result.scalars().all()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile updates (C6)
+# ─────────────────────────────────────────────────────────────────────────────
+
+async def update_founder_profile(
+    db: AsyncSession,
+    user_id: int,
+    updates: Dict[str, Any],
+) -> FounderProfileDB:
+    """Обновляет поля внутри normalized_profile для founder_profiles.
+    Если записи нет — создаёт минимальную с этими полями."""
+    record = await get_founder_profile_by_user_id(db, user_id)
+    if record is None:
+        record = FounderProfileDB(
+            user_id=user_id,
+            raw_answers={},
+            normalized_profile=dict(updates),
+        )
+        db.add(record)
+        await db.commit()
+        await db.refresh(record)
+        return record
+
+    np = dict(record.normalized_profile or {})
+    np.update(updates)
+    record.normalized_profile = np
+    await db.commit()
+    await db.refresh(record)
+    return record
