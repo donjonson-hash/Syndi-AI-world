@@ -8,6 +8,7 @@ Endpoints:
   POST /api/v1/like/{to_user_id}   — поставить лайк/дизлайк
   GET  /api/v1/matches             — список взаимных матчей текущего пользователя
 """
+import asyncio
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
@@ -162,6 +163,22 @@ async def post_like(
                     )
             except Exception as e:
                 logger.warning(f"Avatar creation failed: {e}")
+
+            # D6: Telegram уведомления о матче (graceful — не ронять /like)
+            try:
+                from telegram_bot.notifications import send_match_notification
+                asyncio.create_task(send_match_notification(
+                    syndi_user_id=from_user_id,
+                    partner_name=to_user.name or f"Founder {to_user_id}",
+                    match_score=match_score or 0,
+                ))
+                asyncio.create_task(send_match_notification(
+                    syndi_user_id=to_user_id,
+                    partner_name=from_user.name or f"Founder {from_user_id}",
+                    match_score=match_score or 0,
+                ))
+            except Exception as e:
+                logger.warning(f"Telegram notification dispatch failed: {e}")
 
     return LikeResponse(
         like_id=like.id,

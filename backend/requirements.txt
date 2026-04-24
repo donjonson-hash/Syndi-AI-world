@@ -37,8 +37,11 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
 
+# Telegram Bot (D6)
+python-telegram-bot>=20.0
+
 # --- Опциональные (раскомментировать когда нужно) ---
-# aiogram>=3.0.0         # Telegram bot
+# aiogram>=3.0.0         # Telegram bot (legacy)
 # apscheduler==3.10.4    # Планировщик задач
 # alembic==1.12.1        # DB миграции
 # black==23.11.0         # Форматтер
