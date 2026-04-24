@@ -26,13 +26,15 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt<5.0.0
 
+# LLM client (OpenAI SDK — используется с Mimo API / base_url override)
+openai>=1.0.0
+
 # Testing
 pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
 
 # --- Опциональные (раскомментировать когда нужно) ---
-# openai>=1.0.0          # LLM агенты
 # aiogram>=3.0.0         # Telegram bot
 # apscheduler==3.10.4    # Планировщик задач
 # alembic==1.12.1        # DB миграции

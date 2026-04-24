@@ -55,7 +55,7 @@ class HistoryResponse(BaseModel):
 
 
 def _llm_available() -> bool:
-    key = os.getenv("DEEPSEEK_API_KEY", "")
+    key = os.getenv("MIMO_API_KEY", "")
     return bool(key and key.strip())
 
 

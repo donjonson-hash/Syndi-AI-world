@@ -216,3 +216,43 @@ def score_pair(a: FounderProfile, b: FounderProfile) -> ScoreBreakdown:
     scores["total_compatibility_score"] = clamp(0.80*ff + 0.20*b5["big5_fit_score"]) if b5 else ff
     scores["risk_flags"] = build_risk_flags(a, b, scores)
     return ScoreBreakdown(**scores)
+
+
+def score_pair_with_mystic(
+    profile_a: FounderProfile,
+    profile_b: FounderProfile,
+    mystic_a: Optional[Dict] = None,
+    mystic_b: Optional[Dict] = None,
+) -> Dict:
+    """
+    Расширенный scoring: FounderFit + Mystic (MBTI / эннеаграмма).
+
+    Формула:
+      total = 0.75 * founder_fit + 0.25 * mystic_total   (если mystic доступен)
+      total = founder_fit                                (иначе — прежняя формула)
+
+    `mystic_a` / `mystic_b` — `normalized_profile` dict'ы (с ключами
+    `mbti_type` / `enneagram_type`). Если любой не передан — mystic не применяется.
+    """
+    from core.mystic.analysis import compute_mystic_score  # локальный импорт — избегаем цикла
+
+    base = score_pair(profile_a, profile_b)
+    founder_fit = base.founder_fit_score
+
+    if mystic_a is None or mystic_b is None:
+        return {
+            "founder_fit_score": founder_fit,
+            "mystic": None,
+            "total_score": base.total_compatibility_score,
+            "breakdown": base.model_dump(),
+        }
+
+    mystic = compute_mystic_score(mystic_a, mystic_b)
+    total = clamp(0.75 * founder_fit + 0.25 * mystic["mystic_total"])
+
+    return {
+        "founder_fit_score": founder_fit,
+        "mystic": mystic,
+        "total_score": total,
+        "breakdown": base.model_dump(),
+    }

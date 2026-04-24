@@ -85,6 +85,10 @@ class FounderProfileDB(Base):
                                        default="syndiai-onboarding-schema-v0.1",
                                        nullable=False)
 
+    # Mystic Engine (C8): MBTI / эннеаграмма для совместимости
+    mbti_type      = Column(String(4),  nullable=True)
+    enneagram_type = Column(Integer,    nullable=True)
+
     is_active  = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime(timezone=True), default=_now, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_now, onupdate=_now, nullable=False)

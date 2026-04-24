@@ -1,10 +1,16 @@
 """
 Kristina UX Designer Agent
+
+В `process_message` сначала пытаемся получить ответ от LLMService (Mimo API).
+Если LLM недоступен (нет ключа) или вернул пустую строку / упал — уходим
+в keyword-fallback (прежняя логика).
 """
 
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone
+
 from .base import AgentRole, AgentResponse, MessageType, get_llm_client
+from services.llm import get_llm_service
 
 
 class KristinaUXDesigner:
@@ -20,19 +26,23 @@ class KristinaUXDesigner:
             "UX Design", "UI Design", "User Research",
             "Prototyping", "Design Thinking", "Figma"
         ]
-        self.system_prompt = "Ты Kristina, UX Designer."
+        self.system_prompt = (
+            "Ты Кристина — AI-ассистент SyndiAI, помогающий основателям находить "
+            "со-фаундеров. Отвечай кратко, по-дружески, на русском языке. "
+            "Разбираешься в UX, продуктовой разработке и командной динамике."
+        )
         self.memories = {}
         self.total_conversations = 0
         self.llm_client = get_llm_client()
-    
+        self.llm_service = get_llm_service()
+
     def get_memory(self, user_id: str):
         if user_id not in self.memories:
             from .base import AgentMemory
             self.memories[user_id] = AgentMemory(user_id=user_id)
         return self.memories[user_id]
-    
+
     def get_info(self) -> dict:
-        """ДОБАВИТЬ ЭТОТ МЕТОД"""
         return {
             "id": self.agent_id,
             "name": self.name,
@@ -42,9 +52,8 @@ class KristinaUXDesigner:
             "total_conversations": self.total_conversations,
             "active_users": len(self.memories)
         }
-    
+
     def _detect_message_type(self, message: str) -> MessageType:
-        """ДОБАВИТЬ ЭТОТ МЕТОД"""
         message_lower = message.lower()
         if any(kw in message_lower for kw in ["код", "code", "python", "javascript"]):
             return MessageType.CODE
@@ -55,74 +64,99 @@ class KristinaUXDesigner:
         if any(kw in message_lower for kw in ["совет", "advice", "помоги"]):
             return MessageType.ADVICE
         return MessageType.TEXT
-    
-    async def process_message(self, user_id: str, message: str, context: Optional[Dict] = None) -> AgentResponse:
-        """ДОБАВИТЬ ЭТОТ МЕТОД"""
+
+    def _fallback_reply(self, message: str):
+        """Keyword-логика. Возвращает (content, suggestions)."""
+        prompt_lower = message.lower()
+
+        if "исследование" in prompt_lower or "research" in prompt_lower:
+            return (
+                "Исследование пользователей — это ключевой этап UX. Начните с интервью.",
+                [
+                    "Как составить план интервью?",
+                    "Сколько пользователей нужно опросить?",
+                    "Какие вопросы задавать?",
+                ],
+            )
+        if "прототип" in prompt_lower or "prototype" in prompt_lower:
+            return (
+                "Прототипирование помогает быстро проверить идеи. Используйте Figma.",
+                [
+                    "Как начать в Figma?",
+                    "Что такое wireframe?",
+                    "Как тестировать прототипы?",
+                ],
+            )
+        if "привет" in prompt_lower:
+            return (
+                "Привет! Рада тебя видеть. Чем могу помочь сегодня?",
+                ["Расскажи о себе", "Что ты умеешь?", "Помоги с дизайном"],
+            )
+        if "help" in prompt_lower or "помоги" in prompt_lower:
+            return (
+                "Я могу помочь с UX-дизайном, исследованиями пользователей и прототипированием.",
+                ["UX исследования", "Прототипирование", "Дизайн системы"],
+            )
+        if "проект" in prompt_lower:
+            return (
+                "Вот план работы над проектом:\n"
+                "- Определите целевую аудиторию\n"
+                "- Составьте User Stories\n"
+                "- Создайте CJM",
+                ["Как определить аудиторию?", "Что такое User Stories?", "Как создать CJM?"],
+            )
+        return (
+            "Интересный вопрос! Давай разберёмся...",
+            ["Узнать больше о UX", "Получить совет", "Обсудить проект"],
+        )
+
+    async def process_message(
+        self,
+        user_id: str,
+        message: str,
+        context: Optional[Dict] = None,
+    ) -> AgentResponse:
         memory = self.get_memory(user_id)
         memory.add_message("user", message)
-        
-        # Простая генерация ответа
-        prompt_lower = message.lower()
-        
-        # Определяем тип сообщения и формируем ответ с suggestions
+
         msg_type = self._detect_message_type(message)
-        
-        if "исследование" in prompt_lower or "research" in prompt_lower:
-            content = "Исследование пользователей — это ключевой этап UX. Начните с интервью."
-            suggestions = [
-                "Как составить план интервью?",
-                "Сколько пользователей нужно опросить?",
-                "Какие вопросы задавать?"
-            ]
-        elif "прототип" in prompt_lower or "prototype" in prompt_lower:
-            content = "Прототипирование помогает быстро проверить идеи. Используйте Figma."
-            suggestions = [
-                "Как начать в Figma?",
-                "Что такое wireframe?",
-                "Как тестировать прототипы?"
-            ]
-        elif "привет" in prompt_lower:
-            content = "Привет! Рада тебя видеть. Чем могу помочь сегодня?"
-            suggestions = [
-                "Расскажи о себе",
-                "Что ты умеешь?",
-                "Помоги с дизайном"
-            ]
-        elif "help" in prompt_lower or "помоги" in prompt_lower:
-            content = "Я могу помочь с UX-дизайном, исследованиями пользователей и прототипированием."
-            suggestions = [
-                "UX исследования",
-                "Прототипирование",
-                "Дизайн системы"
-            ]
-        elif "проект" in prompt_lower:
-            content = """Вот план работы над проектом:
-- Определите целевую аудиторию
-- Составьте User Stories
-- Создайте CJM"""
-            suggestions = [
-                "Как определить аудиторию?",
-                "Что такое User Stories?",
-                "Как создать CJM?"
-            ]
+
+        content: str = ""
+        if self.llm_service is not None and getattr(self.llm_service, "api_key", ""):
+            try:
+                # Берём последние 10 сообщений как контекст (исключая только что добавленное
+                # user-сообщение — оно передаётся как `prompt`).
+                history = memory.get_context(10)[:-1]
+                llm_context = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in history
+                    if m.get("role") in ("user", "assistant")
+                ]
+                content = await self.llm_service.generate_response(
+                    prompt=message,
+                    system_prompt=self.system_prompt,
+                    context=llm_context,
+                ) or ""
+            except Exception:
+                content = ""
+
+        if not isinstance(content, str) or not content.strip():
+            fb_content, suggestions = self._fallback_reply(message)
+            content = fb_content
         else:
-            content = "Интересный вопрос! Давай разберёмся..."
-            suggestions = [
-                "Узнать больше о UX",
-                "Получить совет",
-                "Обсудить проект"
-            ]
-        
+            # Для LLM-ответа suggestions генерируем по keyword (чтобы UI не терял кнопки).
+            _, suggestions = self._fallback_reply(message)
+
         response = AgentResponse(
             content=content,
             message_type=msg_type,
-            suggestions=suggestions[:3],  # Берём первые 3 suggestions
+            suggestions=suggestions[:3],
             actions=[
                 {"type": "suggest", "label": "Получить совет", "payload": "advice"},
-                {"type": "share", "label": "Поделиться", "payload": "share"}
-            ]
+                {"type": "share", "label": "Поделиться", "payload": "share"},
+            ],
         )
-        
+
         memory.add_message("assistant", content)
         self.total_conversations += 1
         return response
