@@ -1,27 +1,42 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Syndi · Founder Match</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="app">
-    <!-- Шапка -->
     <header>
       <h1>✨ Syndi</h1>
       <div id="user-status">не авторизован</div>
     </header>
 
-    <!-- Основной контент -->
     <main id="content">
-      <!-- Шаг 1: Регистрация / ввод данных -->
-      <section id="step-profile" class="step active">
+      <!-- Шаг 0: Авторизация -->
+      <section id="step-auth" class="step active">
+        <div class="auth-tabs">
+          <button class="auth-tab active" data-mode="login">Вход</button>
+          <button class="auth-tab" data-mode="register">Регистрация</button>
+        </div>
+        <form id="auth-form">
+          <input type="text" id="auth-name" placeholder="Имя" autocomplete="name">
+          <input type="email" id="auth-email" placeholder="Email" autocomplete="email" required>
+          <input type="password" id="auth-password" placeholder="Пароль" autocomplete="current-password" minlength="6" required>
+          <button type="submit" id="auth-submit" class="primary-btn">Войти</button>
+        </form>
+        <p id="auth-error" class="error-msg hidden"></p>
+      </section>
+
+      <!-- Шаг 1: Профиль -->
+      <section id="step-profile" class="step">
         <h2>Создай профиль основателя</h2>
         <form id="profile-form">
           <input type="text" id="name" placeholder="Имя" required>
-          <input type="email" id="email" placeholder="Email" required>
           <select id="role" required>
             <option value="">Выбери роль</option>
             <option value="builder">Строитель (Builder)</option>
@@ -30,7 +45,7 @@
             <option value="operator">Оператор (Operator)</option>
           </select>
           <textarea id="bio" placeholder="О себе (кратко)"></textarea>
-          <button type="submit">Продолжить</button>
+          <button type="submit" class="primary-btn">Продолжить</button>
         </form>
       </section>
 
@@ -48,20 +63,58 @@
         <div id="progress">Вопрос 1 / 15</div>
       </section>
 
-      <!-- Шаг 3: Просмотр матчей (карточки) -->
+      <!-- Шаг 3: Discover (свайп карточки) -->
       <section id="step-matches" class="step">
-        <h2>Твои потенциальные сооснователи</h2>
+        <h2>Discover</h2>
         <div id="matches-container" class="card-stack"></div>
-        <div class="actions">
-          <button id="skip-btn" class="secondary">👎 Пропустить</button>
-          <button id="like-btn" class="primary">👍 Нравится</button>
-        </div>
+        <div class="swipe-hint">← свайп влево пропустить · вправо лайк →</div>
         <button id="refresh-matches" class="text-btn">Загрузить ещё</button>
+      </section>
+
+      <!-- Шаг 4: Список взаимных матчей -->
+      <section id="step-mymatches" class="step">
+        <h2>Твои матчи</h2>
+        <div id="mymatches-list" class="matches-list"></div>
+      </section>
+
+      <!-- Шаг 5: Аватар -->
+      <section id="step-avatar" class="step">
+        <h2>Твой AI-аватар</h2>
+        <div id="avatar-container"></div>
+      </section>
+
+      <!-- Шаг 6: Чат с Kristina -->
+      <section id="step-chat" class="step">
+        <h2>💬 Kristina</h2>
+        <div id="chat-history" class="chat-history"></div>
+        <form id="chat-form" class="chat-input">
+          <input type="text" id="chat-input" placeholder="Напиши сообщение..." autocomplete="off">
+          <button type="submit" class="send-btn">➤</button>
+        </form>
       </section>
     </main>
 
-    <!-- Индикатор загрузки -->
-    <div id="loader" class="hidden">Загрузка...</div>
+    <!-- Нижнее меню -->
+    <nav id="tab-bar" class="tab-bar hidden">
+      <button class="tab-btn" data-tab="matches">
+        <span class="tab-icon">🔍</span>
+        <span class="tab-label">Discover</span>
+      </button>
+      <button class="tab-btn" data-tab="mymatches">
+        <span class="tab-icon">❤️</span>
+        <span class="tab-label">Матчи</span>
+      </button>
+      <button class="tab-btn" data-tab="avatar">
+        <span class="tab-icon">🤖</span>
+        <span class="tab-label">Аватар</span>
+      </button>
+      <button class="tab-btn" data-tab="chat">
+        <span class="tab-icon">💬</span>
+        <span class="tab-label">Kristina</span>
+      </button>
+    </nav>
+
+    <div id="loader" class="hidden"><div class="spinner"></div></div>
   </div>
 
   <script src="app.js"></script>
