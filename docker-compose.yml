@@ -1,13 +1,18 @@
 version: "3.9"
 
 # ============================================================
-# Syndi-AI — единый production стек для VPS
-# Запуск: docker compose up -d
+# Syndi-AI Monorepo — production стек
+# Структура:
+#   nginx (80/443)
+#     ├── /api/      → FastAPI backend (8000)
+#     ├── /embed/    → Vector микросервис (8001)
+#     ├── /bot/      → Kristina AI бот (8080)
+#     └── /          → React frontend (3000)
 # ============================================================
 
 services:
 
-  # ─── FastAPI backend ─────────────────────────────────────
+  # ─── FastAPI backend ──────────────────────────────────────
   api:
     build:
       context: ./backend
@@ -33,7 +38,49 @@ services:
       - ./backend:/app
       - model_cache:/root/.cache/huggingface
 
-  # ─── Embed / Vector микросервис ──────────────────────────
+  # ─── Kristina AI бот (core/) ───────────────────────────
+  kristina:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    container_name: syndi_kristina
+    ports:
+      - "8080:8080"
+    env_file: ./core/.env
+    environment:
+      - DATABASE_URL=postgresql://syndi:${POSTGRES_PASSWORD:-syndi}@postgres:5432/syndi_db
+      - REDIS_URL=redis://redis:6379/1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./core:/app
+      - kristina_data:/app/data
+    # Примечание: создайте core/Dockerfile после переноса файлов
+    profiles:
+      - full
+
+  # ─── React фронтенд (frontend/) ────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: syndi_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://api:8000
+    depends_on:
+      - api
+    restart: unless-stopped
+    # Примечание: создайте frontend/Dockerfile после переноса файлов
+    profiles:
+      - full
+
+  # ─── Embed / Vector микросервис ──────────────────────
   embed:
     build:
       context: ./backend
@@ -55,7 +102,7 @@ services:
     volumes:
       - model_cache:/root/.cache/huggingface
 
-  # ─── PostgreSQL ──────────────────────────────────────────
+  # ─── PostgreSQL ────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: syndi_postgres
@@ -75,7 +122,7 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # ─── Redis ───────────────────────────────────────────────
+  # ─── Redis ─────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: syndi_redis
@@ -88,7 +135,7 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # ─── Qdrant (vector DB) ───────────────────────────────────
+  # ─── Qdrant (vector DB) ────────────────────────────────
   qdrant:
     image: qdrant/qdrant:latest
     container_name: syndi_qdrant
@@ -104,7 +151,7 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  # ─── Nginx reverse proxy ─────────────────────────────────
+  # ─── Nginx reverse proxy ──────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: syndi_nginx
@@ -123,3 +170,10 @@ volumes:
   pgdata:
   qdrant_data:
   model_cache:
+  kristina_data:
+
+# ────────────────────────────────────────────────────────
+# Команды запуска:
+#   docker compose up -d              — базовый стек (api+embed+db)
+#   docker compose --profile full up -d — полный стек (вкл. бот и frontend)
+# ────────────────────────────────────────────────────────
