@@ -21,6 +21,7 @@ from database.models import User as UserDB
 from auth import get_current_user
 from scoring import score_pair, FounderProfile
 from avatar_platform.avatar_factory import AvatarFactory
+from avatar_platform.message_bus import MessageBus, MessageType
 
 logger = logging.getLogger(__name__)
 
@@ -141,28 +142,45 @@ async def post_like(
 
             # D4: создание AI-аватаров для обоих со-фаундеров при матче
             try:
+                norm_from: dict = {}
+                norm_to: dict = {}
                 from_profile = await crud.get_founder_profile_by_user_id(db, from_user_id)
                 if from_profile:
-                    norm = from_profile.normalized_profile or {}
+                    norm_from = from_profile.normalized_profile or {}
                     AvatarFactory.create_avatar(
                         user_id=from_user_id,
-                        founder_name=norm.get("name", from_user.name or f"Founder {from_user_id}"),
-                        role_id=str(norm.get("primary_role", "builder")),
+                        founder_name=norm_from.get("name", from_user.name or f"Founder {from_user_id}"),
+                        role_id=str(norm_from.get("primary_role", "builder")),
                         match_id=match_db.id,
                         partner_user_id=to_user_id,
                     )
                 to_profile = await crud.get_founder_profile_by_user_id(db, to_user_id)
                 if to_profile:
-                    norm = to_profile.normalized_profile or {}
+                    norm_to = to_profile.normalized_profile or {}
                     AvatarFactory.create_avatar(
                         user_id=to_user_id,
-                        founder_name=norm.get("name", to_user.name or f"Founder {to_user_id}"),
-                        role_id=str(norm.get("primary_role", "builder")),
+                        founder_name=norm_to.get("name", to_user.name or f"Founder {to_user_id}"),
+                        role_id=str(norm_to.get("primary_role", "builder")),
                         match_id=match_db.id,
                         partner_user_id=from_user_id,
                     )
+
+                # E2: MessageBus — синхронизация контекста между аватарами пары
+                bus = MessageBus.get_instance()
+                bus.broadcast_context_sync(
+                    match_id=match_db.id,
+                    user_a_id=from_user_id,
+                    user_b_id=to_user_id,
+                    context={
+                        "match_score": float(match_score or 0),
+                        "roles": {
+                            str(from_user_id): str(norm_from.get("primary_role", "builder")),
+                            str(to_user_id): str(norm_to.get("primary_role", "builder")),
+                        },
+                    },
+                )
             except Exception as e:
-                logger.warning(f"Avatar creation failed: {e}")
+                logger.warning(f"Avatar/MessageBus init failed: {e}")
 
             # D6: Telegram уведомления о матче (graceful — не ронять /like)
             try:
