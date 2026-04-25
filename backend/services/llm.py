@@ -56,14 +56,22 @@ class LLMService:
         messages.append({"role": "user", "content": prompt})
 
         try:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"LLM request: model={self.model}, messages={len(messages)}")
             response = await client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 max_tokens=512,
                 temperature=0.7,
             )
-            return response.choices[0].message.content or ""
-        except Exception:
+            result = response.choices[0].message.content or ""
+            logger.info(f"LLM response: {len(result)} chars")
+            return result
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"LLM error: {e}")
             return ""
 
     async def analyze_personality(self, text: str) -> Dict[str, float]:
