@@ -1,4 +1,6 @@
-# SyndiAI Backend — Core dependencies (MVP demo)
+# SyndiAI Backend — Core dependencies
+# Install: pip install -r requirements.txt
+# Torch CPU-only (saves ~2GB): pip install torch --index-url https://download.pytorch.org/whl/cpu
 
 # Web Framework
 fastapi==0.104.1
@@ -14,22 +16,22 @@ sqlalchemy==2.0.23
 aiosqlite==0.19.0
 asyncpg==0.29.0
 
-# Redis (кэш, сессии, pub/sub для аватаров) — redis[asyncio] даёт aioredis-совместимый API
+# Redis
 redis>=5.0.0
 
-# HTTP Client (нужен aiohttp для агентов)
+# HTTP Client
 aiohttp==3.9.5
 
 # Utilities
 python-dotenv==1.0.1
 aiofiles==23.1.0
 
-# Auth (JWT + password hashing)
+# Auth
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 bcrypt<5.0.0
 
-# LLM client (OpenAI SDK — используется с Mimo API / base_url override)
+# LLM client (OpenAI SDK / DeepSeek / GenAPI — compatible via base_url override)
 openai>=1.0.0
 
 # Testing
@@ -37,13 +39,22 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
 
-# Telegram Bot (D6)
+# Telegram Bot
 python-telegram-bot>=20.0
 
-# --- Опциональные (раскомментировать когда нужно) ---
-# aiogram>=3.0.0         # Telegram bot (legacy)
-# apscheduler==3.10.4    # Планировщик задач
-# alembic==1.12.1        # DB миграции
-# black==23.11.0         # Форматтер
+# ─── Synthia: Semantic Search (embed_server.py) ───
+# Torch: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.2.0
+sentence-transformers>=3.0.0
+transformers>=4.40.0
+numpy>=1.26.0
+tokenizers>=0.19.0
+qdrant-client>=1.9.0
+
+# ─── Опциональные (uncomment when needed) ───
+# aiogram>=3.0.0
+# apscheduler==3.10.4
+# alembic==1.12.1
+# black==23.11.0
 # flake8==6.1.0
 # mypy==1.7.1
