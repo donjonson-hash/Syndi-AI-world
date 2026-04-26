@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { Match, MatchResult, UserProfile } from '../types/matching';
+import type { Match, UserProfile } from '../types/matching';
 
 export const matchingApi = {
   // Список матчей текущего пользователя
