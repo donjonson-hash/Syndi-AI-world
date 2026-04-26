@@ -32,7 +32,7 @@ services:
       redis:
         condition: service_healthy
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     volumes:
       - ./backend:/app
@@ -95,7 +95,7 @@ services:
       - EMBED_MODEL_RU=${EMBED_MODEL_RU:-paraphrase-multilingual-MiniLM-L12-v2}
     depends_on:
       qdrant:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     volumes:
       - model_cache:/root/.cache/huggingface
@@ -140,12 +140,6 @@ services:
       - "6334:6333"
     volumes:
       - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/healthz || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 15s
     restart: unless-stopped
 
   # ─── Nginx reverse proxy ──────────────────────────────────
