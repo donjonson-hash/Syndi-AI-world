@@ -36,7 +36,6 @@ services:
     restart: unless-stopped
     volumes:
       - ./backend:/app
-      - model_cache:/root/.cache/huggingface
 
   # ─── Kristina AI бот (core/) ──────────────────────────────
   kristina:
@@ -83,9 +82,8 @@ services:
   embed:
     build:
       context: ./backend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.embed
     container_name: syndi_embed
-    command: uvicorn app.embed_server:app --host 0.0.0.0 --port 8001
     ports:
       - "9001:8001"
     env_file: .env
@@ -100,7 +98,7 @@ services:
     volumes:
       - model_cache:/root/.cache/huggingface
 
-  # ─── PostgreSQL (внутренний порт 5433 — не конфликтует) ───
+  # ─── PostgreSQL ───────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: syndi_postgres
@@ -119,7 +117,7 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # ─── Redis (внутренний порт 6380 — не конфликтует) ────────
+  # ─── Redis ────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
     container_name: syndi_redis
