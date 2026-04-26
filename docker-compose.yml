@@ -2,12 +2,12 @@ version: "3.9"
 
 # ============================================================
 # Syndi-AI Monorepo — production стек
-# Структура:
-#   nginx (80/443)
-#     ├── /api/      → FastAPI backend (8000)
-#     ├── /embed/    → Vector микросервис (8001)
-#     ├── /bot/      → Kristina AI бот (8080)
-#     └── /          → React frontend (3000)
+# Порты (не конфликтуют со старой системой на 8000-8082):
+#   nginx     → 8090 (http), 8443 (https)
+#     ├── /api/    → FastAPI backend  (9000)
+#     ├── /embed/  → Vector сервис    (9001)
+#     ├── /bot/    → Kristina bot     (9080)
+#     └── /        → React frontend   (3000)
 # ============================================================
 
 services:
@@ -16,14 +16,14 @@ services:
   api:
     build:
       context: ./backend
-      target: production
+      dockerfile: Dockerfile
     container_name: syndi_api
     ports:
-      - "8000:8000"
+      - "9000:8000"
     env_file: .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://syndi:${POSTGRES_PASSWORD:-syndi}@postgres:5432/syndi_db
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6380/0
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
     depends_on:
@@ -38,18 +38,18 @@ services:
       - ./backend:/app
       - model_cache:/root/.cache/huggingface
 
-  # ─── Kristina AI бот (core/) ───────────────────────────
+  # ─── Kristina AI бот (core/) ──────────────────────────────
   kristina:
     build:
       context: ./core
       dockerfile: Dockerfile
     container_name: syndi_kristina
     ports:
-      - "8080:8080"
+      - "9080:8080"
     env_file: ./core/.env
     environment:
       - DATABASE_URL=postgresql://syndi:${POSTGRES_PASSWORD:-syndi}@postgres:5432/syndi_db
-      - REDIS_URL=redis://redis:6379/1
+      - REDIS_URL=redis://redis:6380/1
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,37 +59,35 @@ services:
     volumes:
       - ./core:/app
       - kristina_data:/app/data
-    # Примечание: создайте core/Dockerfile после переноса файлов
     profiles:
       - full
 
-  # ─── React фронтенд (frontend/) ────────────────────────
+  # ─── React фронтенд (frontend/) ───────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=http://195.245.112.66:9000
+        - VITE_WS_URL=ws://195.245.112.66:9000
     container_name: syndi_frontend
     ports:
       - "3000:3000"
-    environment:
-      - VITE_API_URL=http://api:8000
     depends_on:
       - api
     restart: unless-stopped
-    # Примечание: создайте frontend/Dockerfile после переноса файлов
     profiles:
       - full
 
-  # ─── Embed / Vector микросервис ──────────────────────
+  # ─── Embed / Vector микросервис ───────────────────────────
   embed:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: production
     container_name: syndi_embed
-    command: uvicorn embed_server:app --host 0.0.0.0 --port 8001
+    command: uvicorn app.embed_server:app --host 0.0.0.0 --port 8001
     ports:
-      - "8001:8001"
+      - "9001:8001"
     env_file: .env
     environment:
       - QDRANT_HOST=qdrant
@@ -102,7 +100,7 @@ services:
     volumes:
       - model_cache:/root/.cache/huggingface
 
-  # ─── PostgreSQL ────────────────────────────────────────
+  # ─── PostgreSQL (внутренний порт 5433 — не конфликтует) ───
   postgres:
     image: postgres:16-alpine
     container_name: syndi_postgres
@@ -111,10 +109,9 @@ services:
       POSTGRES_USER: syndi
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-syndi}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U syndi -d syndi_db"]
       interval: 5s
@@ -122,12 +119,12 @@ services:
       retries: 10
     restart: unless-stopped
 
-  # ─── Redis ─────────────────────────────────────────────
+  # ─── Redis (внутренний порт 6380 — не конфликтует) ────────
   redis:
     image: redis:7-alpine
     container_name: syndi_redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -135,12 +132,12 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # ─── Qdrant (vector DB) ────────────────────────────────
+  # ─── Qdrant (vector DB) ───────────────────────────────────
   qdrant:
     image: qdrant/qdrant:latest
     container_name: syndi_qdrant
     ports:
-      - "6333:6333"
+      - "6334:6333"
     volumes:
       - qdrant_data:/qdrant/storage
     healthcheck:
@@ -151,16 +148,14 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  # ─── Nginx reverse proxy ──────────────────────────────
+  # ─── Nginx reverse proxy ──────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: syndi_nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "8090:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
     depends_on:
       - api
       - embed
@@ -172,8 +167,18 @@ volumes:
   model_cache:
   kristina_data:
 
-# ────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────
 # Команды запуска:
-#   docker compose up -d              — базовый стек (api+embed+db)
-#   docker compose --profile full up -d — полный стек (вкл. бот и frontend)
-# ────────────────────────────────────────────────────────
+#   docker compose up -d                    — базовый стек
+#   docker compose --profile full up -d    — полный стек
+#
+# Новые порты (безопасно со старой системой):
+#   API:      http://195.245.112.66:9000
+#   Embed:    http://195.245.112.66:9001
+#   Frontend: http://195.245.112.66:3000
+#   Bot:      http://195.245.112.66:9080
+#   Nginx:    http://195.245.112.66:8090
+#   Qdrant:   http://195.245.112.66:6334
+#   Postgres: localhost:5433 (внутри Docker)
+#   Redis:    localhost:6380 (внутри Docker)
+# ──────────────────────────────────────────────────────────
