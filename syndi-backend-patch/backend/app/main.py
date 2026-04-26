@@ -1,11 +1,9 @@
-from dotenv import load_dotenv
-load_dotenv()
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .database import engine, Base
-from .routers import auth, profiles, matching, messages, health, quantum, quantum
+from .routers import auth, profiles, matching, messages, health, quantum
 
 
 @asynccontextmanager
