@@ -1,32 +1,24 @@
 name: Syndi AI CI
+
 on:
   push:
     branches: [main]
-    paths: ['backend/**', 'core/**', '.github/workflows/main.yml', 'docker-compose.yml']
+    paths: ['backend/**', 'core/**', '.github/workflows/main.yml']
   pull_request:
     branches: [main]
     paths: ['backend/**', 'core/**']
+
 env:
-  DATABASE_URL: postgresql+asyncpg://syndi:password@localhost:5432/syndi_test
+  DATABASE_URL: sqlite+aiosqlite:///./test.db
   JWT_SECRET_KEY: test-secret-key
   PYTHON_VERSION: '3.12'
+
 jobs:
   backend-test:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: backend
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: syndi
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: syndi_test
-        options: >-
-          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-        ports:
-          - 5432:5432
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -35,7 +27,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
-      - run: pip install -r requirements.txt
-      - run: ruff check app/ tests/
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements-api.txt') }}
+      - run: pip install -r requirements-api.txt
+      - run: ruff check . --exclude alembic/
       - run: pytest tests/ -v --tb=short
