@@ -2,7 +2,6 @@
 Tests for Big Five personality assessment
 """
 
-import pytest
 from models.big_five import (
     BigFiveTest, BigFiveProfile, TraitType, 
     AnswerScale, BIG_FIVE_QUESTIONS
@@ -54,7 +53,7 @@ class TestBigFiveTest:
     
     def test_reversed_questions(self):
         """Проверка обратного кодирования вопросов"""
-        test = BigFiveTest()
+        test = BigFiveTest()  # noqa: F841
         
         # Находим обратный вопрос
         reversed_questions = [q for q in BIG_FIVE_QUESTIONS if q.reversed]

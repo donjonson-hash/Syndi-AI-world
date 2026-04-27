@@ -1,7 +1,10 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from database.models import User, FounderProfileDB
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from database.models import LikeDB, MatchDB
 from datetime import datetime, timezone
 
 

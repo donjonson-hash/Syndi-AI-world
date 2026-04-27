@@ -5,7 +5,6 @@ Run from backend/ directory: pytest tests/test_trial_period.py -v
 """
 import pytest
 from datetime import datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from services.trial_period import (
     TrialPeriodService,

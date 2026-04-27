@@ -7,8 +7,7 @@ Version: syndiai-onboarding-schema-v0.1
 from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from scoring import (
-    BigFiveProfile, ConflictStyle, DecisionStyle,
-    FounderProfile, IntentGoal, RoleType, TempoType, WorkMode,
+    BigFiveProfile, FounderProfile,
 )
 
 ONBOARDING_SCHEMA_VERSION = "syndiai-onboarding-schema-v0.1"

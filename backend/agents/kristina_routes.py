@@ -8,7 +8,7 @@ GET  /api/v1/kristina/history — JWT-protected: история сообщени
 import os
 from typing import Optional, List, Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 

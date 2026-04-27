@@ -7,7 +7,6 @@ test_agent_router.py — тесты для AgentRouter (D3).
   - наличие непустого system_prompt у каждого режима
   - интеграцию в POST /api/v1/kristina/chat (поле `mode` в ответе)
 """
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 

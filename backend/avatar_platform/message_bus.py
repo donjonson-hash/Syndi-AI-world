@@ -2,7 +2,6 @@
 MessageBus — шина сообщений между аватарами со-фаундеров.
 Адаптировано из kristina-revolutionary/avatar_platform/message_bus.py
 """
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime

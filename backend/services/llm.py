@@ -6,7 +6,7 @@ Mimo совместим с OpenAI API и использует `openai` клие�
 возвращает пустую строку, а вызывающий код уходит на keyword-fallback.
 """
 import os
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 
 class LLMService:

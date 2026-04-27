@@ -1,7 +1,6 @@
 """
 test_profession.py — ProfessionProfile + PROFESSION_REGISTRY (D1).
 """
-import pytest
 from httpx import AsyncClient
 
 from avatar_platform.profession_profile import (

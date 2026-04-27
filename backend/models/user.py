@@ -4,7 +4,7 @@ User Models
 """
 
 from datetime import datetime, timezone
-from typing import List, Optional, Dict
+from typing import List, Optional
 from enum import Enum
 from pydantic import BaseModel, ConfigDict, Field, EmailStr
 from uuid import UUID, uuid4

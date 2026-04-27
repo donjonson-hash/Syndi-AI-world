@@ -6,7 +6,6 @@ test_mystic.py — C8 Mystic Engine tests (MBTI + эннеаграмма в ск
   - score_pair_with_mystic — с mystic данными и без (фоллбэк на FounderFit)
   - MBTI_TYPES — словарь содержит все 16 типов
 """
-import pytest
 
 from core.mystic.analysis import compute_mystic_score
 from core.mystic.mbti import MBTI_TYPES

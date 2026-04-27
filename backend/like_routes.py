@@ -21,7 +21,7 @@ from database.models import User as UserDB
 from auth import get_current_user
 from scoring import score_pair, FounderProfile
 from avatar_platform.avatar_factory import AvatarFactory
-from avatar_platform.message_bus import MessageBus, MessageType
+from avatar_platform.message_bus import MessageBus
 
 logger = logging.getLogger(__name__)
 

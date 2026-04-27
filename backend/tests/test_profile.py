@@ -1,7 +1,6 @@
 """
 test_profile.py — GET/PATCH /api/v1/profile/me (C6).
 """
-import pytest
 from httpx import AsyncClient
 
 

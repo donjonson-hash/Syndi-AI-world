@@ -13,8 +13,6 @@
   8. Симметрия: builder+seller даёт более высокий score чем builder+tourist
 """
 import pytest
-import pytest_asyncio
-from httpx import AsyncClient
 
 
 # ─────────────────────────────────────────────────────────────────────────────

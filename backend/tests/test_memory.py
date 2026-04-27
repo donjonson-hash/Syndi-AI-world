@@ -8,7 +8,6 @@ test_memory.py — тесты для D5: трёхуровневая память
   - MemoryManager: build_llm_context
   - /chat → /history: integration через PersistentMemory
 """
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 

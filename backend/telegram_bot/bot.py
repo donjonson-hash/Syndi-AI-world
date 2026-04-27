@@ -5,9 +5,7 @@ Syndi AI Telegram Bot
 Запуск: python telegram_bot/bot.py
 """
 import os
-import asyncio
 import logging
-from typing import Optional
 
 from pathlib import Path
 from dotenv import load_dotenv

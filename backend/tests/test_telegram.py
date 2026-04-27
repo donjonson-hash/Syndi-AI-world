@@ -2,7 +2,6 @@
 Unit-тесты для telegram_bot (D6).
 Не требуют реального Telegram токена и не запускают polling.
 """
-import os
 import pytest
 
 from telegram_bot import notifications as tg_notif

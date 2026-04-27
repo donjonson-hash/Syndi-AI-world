@@ -306,7 +306,7 @@ class EnneagramAnalyzer:
         # Парсим код типа с крылом
         if 'w' in code:
             main_type = int(code.split('w')[0])
-            wing = int(code.split('w')[1])
+            _wing = int(code.split('w')[1])
             return self.types.get(main_type)
         else:
             return self.types.get(int(code))

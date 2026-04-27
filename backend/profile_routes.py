@@ -7,7 +7,7 @@ profile_routes.py — GET/PATCH /api/v1/profile/me (C6).
 """
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 

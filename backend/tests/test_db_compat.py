@@ -10,10 +10,8 @@ test_db_compat.py — unit тесты совместимости БД и Redis (
 Тесты SQLite-only — настоящего PostgreSQL не требуется.
 """
 import importlib
-import os
 import sys
 
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 

@@ -3,7 +3,6 @@ test_auth.py — интеграционные тесты /api/v1/auth/{register,
 
 Использует общий conftest.py (httpx.AsyncClient + SQLite in-memory).
 """
-import pytest
 from httpx import AsyncClient
 from jose import jwt
 

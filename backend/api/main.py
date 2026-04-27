@@ -12,7 +12,6 @@ Scoring-движок: services/scoring.py + services/questionnaire_normalizer.py
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
@@ -170,7 +169,7 @@ def _map_raw_to_normalizer(raw: Dict[str, Any]) -> Dict[str, Any]:
         "18_months": 18, "24_months": 24,
     }
     LAUNCHED_MAP = {"0": 0, "1": 1, "1-2": 1, "2": 2, "3+": 7, "5+": 9}
-    BREADTH_MAP  = {"low": 2, "medium": 5, "high": 8}
+    _BREADTH_MAP  = {"low": 2, "medium": 5, "high": 8}
     SYNC_MAP     = {
         "daily": 7, "every_other_day": 4, "twice_a_week": 2,
         "weekly": 1, "as_needed": 1,

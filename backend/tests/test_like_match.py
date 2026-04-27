@@ -4,7 +4,6 @@ test_like_match.py — интеграционные тесты для like/match
 POST /api/v1/like/{to_user_id}
 GET  /api/v1/matches?user_id={id}
 """
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 

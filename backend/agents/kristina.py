@@ -6,8 +6,7 @@ Kristina UX Designer Agent
 в keyword-fallback (прежняя логика).
 """
 
-from typing import Optional, Dict, Any
-from datetime import datetime, timezone
+from typing import Optional, Dict
 
 from .base import AgentRole, AgentResponse, MessageType, get_llm_client
 from services.llm import get_llm_service

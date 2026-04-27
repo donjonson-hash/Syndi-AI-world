@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +192,7 @@ def _refresh_mode(state: dict) -> None:
 
 
 def _format(state: dict) -> dict:
-    now = _now()
+    now = _now()  # noqa: F841
     days_left = _days_left(state["started_at"])
     return {
         "match_id": state["match_id"],

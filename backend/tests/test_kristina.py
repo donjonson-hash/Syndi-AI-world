@@ -8,7 +8,6 @@ test_kristina.py — тесты для Kristina AI agent (C7).
   - Continuity памяти по session_id
   - Graceful fallback если LLM кидает исключение
 """
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 

@@ -11,7 +11,6 @@ IONQ Quantum Computing Integration
 import os
 from typing import Optional, Dict, Any, List
 import aiohttp
-import json
 
 
 class IonQClient:
@@ -193,7 +192,7 @@ class QuantumPathGenerator:
         """Создать квантовую схему из профиля пользователя"""
         # Используем Big Five или другие параметры для создания схемы
         
-        big_five = profile.get("big_five", {})
+        _big_five = profile.get("big_five", {})
         
         # Преобразуем параметры в квантовые гейты
         num_qubits = 5  # По одному на каждую черту Big Five

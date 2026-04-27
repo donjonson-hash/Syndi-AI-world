@@ -9,7 +9,7 @@ GET  /api/trial/access/{id}    — проверить режим доступа 
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from ..services.trial_period import (
@@ -22,7 +22,6 @@ from ..telegram_bot.trial_notifications import (
     send_trial_started,
     send_trial_activity_confirmed,
 )
-from ..telegram_bot.notifications import get_telegram_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/trial", tags=["trial"])

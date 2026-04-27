@@ -5,7 +5,6 @@ Matching Algorithm
 
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
-import math
 
 from models.user import UserProfile, Skill, UserGoal, UserPublicProfile
 from models.big_five import BigFiveProfile

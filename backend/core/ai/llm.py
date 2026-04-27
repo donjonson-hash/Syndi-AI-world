@@ -9,7 +9,6 @@ from typing import Optional, Dict, Any, List, AsyncGenerator
 from dataclasses import dataclass
 from enum import Enum
 import aiohttp
-import asyncio
 
 
 class LLMProvider(str, Enum):

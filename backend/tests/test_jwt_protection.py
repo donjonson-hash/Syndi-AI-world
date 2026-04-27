@@ -4,7 +4,6 @@ test_jwt_protection.py — проверяем что like/match/discover тре�
 Без токена или с невалидным токеном эндпоинты должны возвращать 401.
 С валидным токеном — работать штатно.
 """
-import pytest
 from httpx import AsyncClient
 
 

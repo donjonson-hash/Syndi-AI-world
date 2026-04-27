@@ -3,11 +3,10 @@ tests/test_founder_profile_db.py — CRUD-тесты для FounderProfileDB.
 
 Проверяют создание, получение, обновление и soft-delete профилей основателей.
 """
-import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
-from database.models import Base, User, FounderProfileDB
+from database.models import Base, User
 from database import crud
 
 # ── In-memory SQLite для тестов ──────────────────────────────────────────────

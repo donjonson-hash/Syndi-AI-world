@@ -8,7 +8,7 @@ GET /api/v1/discover?user_id={id}&limit={n}
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.database import get_db
@@ -23,25 +23,42 @@ discover_router = APIRouter(tags=["discover"])
 
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 50
+MIN_SCORE = 35.0       # Не показывать кандидатов с совместимостью ниже этого порога
+HAS_BIG5_BONUS = 8.0   # Бонус к score когда оба профиля содержат Big Five данные
 
 
 # ─── Pydantic schemas ─────────────────────────────────────────────────────────
+
+class BigFiveMatch(BaseModel):
+    """Big Five compatibility breakdown between two users."""
+    openness: Optional[float] = None            # 0-100: совместимость по openness
+    conscientiousness: Optional[float] = None    # 0-100: совместимость по conscientiousness
+    extraversion: Optional[float] = None         # 0-100: совместимость по extraversion
+    agreeableness: Optional[float] = None        # 0-100: совместимость по agreeableness
+    emotional_stability: Optional[float] = None  # 0-100: совместимость по emotional_stability
+    overall_fit: Optional[float] = None          # 0-100: weighted Big Five fit
+    has_data: bool = False                       # True если оба профиля содержат Big Five
+
 
 class DiscoverCard(BaseModel):
     candidate_user_id: int
     candidate_name: str
     primary_role: str
     total_score: float
+    founder_fit_score: float
     intent_goal: str
     risk_flags: List[str]
     why: str
+    big5: BigFiveMatch                            # Big Five compatibility breakdown
+    tags: List[str] = Field(default_factory=list)  # human-readable теги совместимости
 
 
 class DiscoverResponse(BaseModel):
     user_id: int
     cards: List[DiscoverCard]
     total: int
-    filtered_already_seen: int   # сколько отфильтровано (уже лайкнутых/дизлайкнутых)
+    filtered_already_seen: int
+    min_score_threshold: float = MIN_SCORE
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -54,22 +71,83 @@ def _fp_from_db(fp_record) -> Optional[FounderProfile]:
         return None
 
 
-def _why_text(breakdown: ScoreBreakdown, candidate: FounderProfile) -> str:
-    """Краткое объяснение совместимости."""
-    parts = []
-    if breakdown.intent_score >= 80:
-        parts.append("одинаковые цели")
+def _build_big5_match(breakdown: ScoreBreakdown) -> BigFiveMatch:
+    """Извлекает Big Five compatibility из ScoreBreakdown."""
+    if breakdown.big5_fit_score is None:
+        return BigFiveMatch(has_data=False)
+    return BigFiveMatch(
+        openness=breakdown.big5_openness_score,
+        conscientiousness=breakdown.big5_conscientiousness_score,
+        extraversion=breakdown.big5_extraversion_score,
+        agreeableness=breakdown.big5_agreeableness_score,
+        emotional_stability=breakdown.big5_emotional_stability_score,
+        overall_fit=breakdown.big5_fit_score,
+        has_data=True,
+    )
+
+
+def _build_tags(breakdown: ScoreBreakdown, me: FounderProfile, candidate: FounderProfile) -> List[str]:
+    """Генерирует human-readable теги совместимости."""
+    tags = []
+    # Роли
     if breakdown.role_score >= 80:
-        parts.append("комплементарные роли")
+        tags.append(f"🤝 Комплементарные роли: {me.primary_role} + {candidate.primary_role}")
+    elif me.primary_role == candidate.primary_role:
+        tags.append(f"⚠️ Одинаковые роли: оба {me.primary_role}")
+    # Цели
+    if breakdown.intent_score >= 80:
+        tags.append("🎯 Одинаковые цели")
+    elif breakdown.intent_score >= 60:
+        tags.append("🎯 Похожие цели")
+    # Темп
+    if breakdown.tempo_score >= 70:
+        tags.append("⚡ Совпадает темп работы")
+    # Accountability
+    if breakdown.accountability_score >= 80:
+        tags.append("🔒 Высокая взаимная ответственность")
+    elif breakdown.accountability_score < 40:
+        tags.append("⚠️ Разный уровень ответственности")
+    # Big Five highlights
+    if breakdown.big5_fit_score is not None:
+        if breakdown.big5_fit_score >= 75:
+            tags.append("🧠 Сильная психологическая совместимость")
+        elif breakdown.big5_fit_score >= 60:
+            tags.append("🧠 Хорошая психологическая совместимость")
+        # Specific Big Five insights
+        if breakdown.big5_conscientiousness_score and breakdown.big5_conscientiousness_score >= 80:
+            tags.append("📋 Оба дисциплинированны в исполнении")
+        if breakdown.big5_openness_score and breakdown.big5_openness_score >= 80:
+            tags.append("🎨 Оба открыты новому")
+        if breakdown.big5_extraversion_score and breakdown.big5_extraversion_score >= 80:
+            tags.append("💬 Оба коммуникабельны")
+    return tags[:5]  # максимум 5 тегов
+
+
+def _why_text(breakdown: ScoreBreakdown, me: FounderProfile, candidate: FounderProfile) -> str:
+    """Подробное объяснение совместимости — с Big Five инсайтами."""
+    parts = []
+    # FounderFit highlights
+    if breakdown.role_score >= 80:
+        parts.append(f"комплементарные роли ({me.primary_role} + {candidate.primary_role})")
+    if breakdown.intent_score >= 80:
+        parts.append("совпадают цели")
     if breakdown.accountability_score >= 80:
         parts.append("высокая ответственность")
-    if breakdown.tempo_score >= 80:
-        parts.append("одинаковый темп")
-    if breakdown.big5_openness_score is not None and breakdown.big5_openness_score >= 70:
-        parts.append("психологическая совместимость")
+    if breakdown.tempo_score >= 70:
+        parts.append(f"похожий темп ({me.tempo} ↔ {candidate.tempo})")
+    # Big Five insights
+    if breakdown.big5_fit_score is not None:
+        if breakdown.big5_fit_score >= 75:
+            parts.append("сильная психологическая совместимость")
+        if breakdown.big5_conscientiousness_score and breakdown.big5_conscientiousness_score >= 80:
+            parts.append("оба дисциплинированны")
+        if breakdown.big5_openness_score and breakdown.big5_openness_score >= 75:
+            parts.append("оба открыты новому")
+        if breakdown.big5_extraversion_score and breakdown.big5_extraversion_score >= 75:
+            parts.append("общительная пара")
     if not parts:
         parts.append("базовая совместимость")
-    return ", ".join(parts[:3]).capitalize()
+    return ", ".join(parts[:4]).capitalize()
 
 
 async def _get_seen_user_ids(db: AsyncSession, from_user_id: int) -> set:
@@ -152,16 +230,25 @@ async def get_discover(
         candidate_user = await crud.get_user_by_id(db, fp_rec.user_id)
         candidate_name = candidate_user.name if candidate_user else str(fp_rec.user_id)
 
-        why = _why_text(breakdown, candidate_profile)
+        # Фильтр по минимальному порогу совместимости
+        if breakdown.total_compatibility_score < MIN_SCORE:
+            continue
+
+        why = _why_text(breakdown, my_profile, candidate_profile)
+        big5_match = _build_big5_match(breakdown)
+        tags = _build_tags(breakdown, my_profile, candidate_profile)
 
         card = DiscoverCard(
             candidate_user_id=fp_rec.user_id,
             candidate_name=candidate_name,
             primary_role=str(candidate_profile.primary_role),
             total_score=round(breakdown.total_compatibility_score, 1),
+            founder_fit_score=round(breakdown.founder_fit_score, 1),
             intent_goal=str(candidate_profile.intent_goal),
             risk_flags=breakdown.risk_flags,
             why=why,
+            big5=big5_match,
+            tags=tags,
         )
         scored.append((breakdown.total_compatibility_score, card))
 

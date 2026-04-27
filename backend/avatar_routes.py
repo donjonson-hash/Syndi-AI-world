@@ -1,5 +1,4 @@
 """Avatar endpoints — получение и управление AI-аватарами со-фаундеров."""
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel

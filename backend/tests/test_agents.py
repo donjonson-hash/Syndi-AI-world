@@ -4,7 +4,6 @@ Tests for AI Agents
 """
 
 import pytest
-import pytest_asyncio
 from agents import get_kristina, AgentResponse
 from agents.base import AgentRole, MessageType, AgentMemory
 

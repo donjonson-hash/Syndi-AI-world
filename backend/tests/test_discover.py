@@ -1,7 +1,6 @@
 """
 test_discover.py — интеграционные тесты GET /api/v1/discover
 """
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient
 

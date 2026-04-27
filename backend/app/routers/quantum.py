@@ -1,8 +1,9 @@
 """Quantum Destiny Engine for Syndi AI - IONQ Quantum API Integration"""
-import os, hashlib
+import os
+import hashlib
 from typing import List, Dict
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 router = APIRouter()
