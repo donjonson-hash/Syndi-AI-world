@@ -647,7 +647,7 @@ async def match_founder_legacy(founder_name: str, db: AsyncSession = Depends(get
 @app.post("/onboarding")
 async def legacy_onboarding(data: RawQuestionnaire, db: AsyncSession = Depends(get_db)):
     """Alias: /onboarding -> /api/v1/onboarding/raw"""
-    return await submit_raw_questionnaire(data, db)
+    return await submit_raw_questionnaire(data, db, current_user=None)
 
 
 @app.get("/match/{user_id}", response_model=List[MatchCard])
