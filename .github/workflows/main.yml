@@ -27,7 +27,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements-api.txt') }}
-      - run: pip install -r requirements-api.txt
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements*.txt') }}
+      - run: pip install -r requirements-api.txt -r requirements.txt
       - run: ruff check . --exclude alembic/
       - run: pytest tests/ -v --tb=short
