@@ -205,3 +205,22 @@ def _format(state: dict) -> dict:
         "last_activity_b": state["last_activity_b"].isoformat() if state["last_activity_b"] else None,
         "notified_days": state["notified_days"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Compatibility aliases for tests
+# ---------------------------------------------------------------------------
+from enum import Enum
+
+class TrialStatus(str, Enum):
+    ACTIVE    = "active"
+    EXPIRED   = "expired"
+    VIEW_ONLY = "view_only"
+
+
+class TrialPeriodService:
+    """Thin wrapper used by tests. Production code uses module-level functions."""
+    def __init__(self):
+        self.trials: dict = {}
+        self.tasks:  dict = {}
+        self.events: list = []

@@ -9,12 +9,8 @@ from __future__ import annotations
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from .trial_period import check_all_trials
-from ..telegram_bot.trial_notifications import (
-    send_trial_reminder,
-    send_trial_expired,
-    send_trial_view_only,
-)
+from services.trial_period import check_all_trials
+# telegram_bot imported lazily inside _run_trial_check
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +19,9 @@ _scheduler: AsyncIOScheduler | None = None
 
 async def _run_trial_check() -> None:
     """Выполняется каждый час планировщиком."""
+    from telegram_bot.trial_notifications import (
+        send_trial_reminder, send_trial_expired, send_trial_view_only,
+    )
     actions = check_all_trials()
     for action in actions:
         match_id = action["match_id"]
@@ -67,3 +66,17 @@ def stop_trial_scheduler() -> None:
     if _scheduler and _scheduler.running:
         _scheduler.shutdown(wait=False)
         logger.info("[TrialScheduler] Stopped")
+
+
+# Compatibility alias for tests
+class TrialScheduler:
+    """Thin wrapper used by tests."""
+    def start(self):
+        start_trial_scheduler()
+
+    def run(self):
+        start_trial_scheduler()
+
+    def check_expired(self):
+        from services.trial_period import check_all_trials
+        return check_all_trials()

@@ -41,6 +41,7 @@ from agents.kristina_routes import router as kristina_router
 from like_routes import like_router
 from discover_routes import discover_router
 from auth_routes import auth_router
+from auth import get_current_user_optional
 from profile_routes import profile_router
 from avatar_routes import router as avatar_router
 
@@ -254,29 +255,40 @@ def _map_raw_to_normalizer(raw: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @app.post("/api/v1/onboarding/raw")
-async def submit_raw_questionnaire(data: RawQuestionnaire, db: AsyncSession = Depends(get_db)):
-    """Принимает raw ответы анкеты фронтенда, нормализует, сохраняет в _profiles + БД."""
+async def submit_raw_questionnaire(
+    data: RawQuestionnaire,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
+    """
+    Принимает raw ответы анкеты фронтенда, нормализует, сохраняет в _profiles + БД.
+
+    Auth integration: если передан JWT — используем authenticated user ID.
+    """
     raw = {k: v for k, v in data.model_dump().items() if v is not None}
-    # Нормализация — 422 если данные невалидные
     try:
         mapped = _map_raw_to_normalizer(raw)
         profile = normalize(mapped)
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    # Сохраняем в памяти (всегда)
+    if current_user:
+        profile.user_id = str(current_user.id)
+
     _profiles[profile.user_id] = profile
 
-    # Сохраняем в БД (best-effort — не ломаем onboarding если БД недоступна)
     try:
-        db_user = await crud.get_user_by_name(db, profile.user_id)
-        if not db_user:
-            db_user = await crud.create_user(db, {
-                "name": profile.user_id,
-                "role": str(profile.primary_role),
-                "skills": [],
-                "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
-            })
+        if current_user:
+            db_user = current_user
+        else:
+            db_user = await crud.get_user_by_name(db, profile.user_id)
+            if not db_user:
+                db_user = await crud.create_user(db, {
+                    "name": profile.user_id,
+                    "role": str(profile.primary_role),
+                    "skills": [],
+                    "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
+                })
         await crud.create_founder_profile(
             db,
             user_id=db_user.id,
@@ -296,24 +308,40 @@ async def submit_raw_questionnaire(data: RawQuestionnaire, db: AsyncSession = De
 
 
 @app.post("/api/v1/onboarding/submit")
-async def submit_onboarding(payload: OnboardingSubmit, db: AsyncSession = Depends(get_db)):
-    """Принимает уже нормализованные данные, сохраняет в _profiles + БД."""
+async def submit_onboarding(
+    payload: OnboardingSubmit,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user_optional),
+):
+    """
+    Принимает нормализованные данные, сохраняет в _profiles + БД.
+
+    Auth integration: если передан JWT токен — используем authenticated user ID,
+    иначе — legacy mode (создаём/ищем пользователя по user_id из body).
+    """
     try:
         profile = normalize(payload.model_dump())
     except Exception as e:
         raise HTTPException(status_code=422, detail=str(e))
 
+    if current_user:
+        # Authenticated: use real user ID, override profile.user_id
+        profile.user_id = str(current_user.id)
+
     _profiles[profile.user_id] = profile
 
     try:
-        db_user = await crud.get_user_by_name(db, profile.user_id)
-        if not db_user:
-            db_user = await crud.create_user(db, {
-                "name": profile.user_id,
-                "role": profile.role,
-                "skills": profile.skills,
-                "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
-            })
+        if current_user:
+            db_user = current_user
+        else:
+            db_user = await crud.get_user_by_name(db, profile.user_id)
+            if not db_user:
+                db_user = await crud.create_user(db, {
+                    "name": profile.user_id,
+                    "role": str(profile.primary_role),
+                    "skills": [],
+                    "psycho_profile": profile.big5.model_dump() if profile.big5 else None,
+                })
         await crud.create_founder_profile(
             db,
             user_id=db_user.id,

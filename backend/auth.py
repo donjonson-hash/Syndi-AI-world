@@ -83,3 +83,20 @@ async def get_current_user(
     if user is None:
         raise credentials_exc
     return user
+
+
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[UserDB]:
+    """Same as get_current_user but returns None instead of raising 401."""
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+    except HTTPException:
+        return None
+    email = payload.get("sub")
+    if not email:
+        return None
+    return await crud.get_user_by_email(db, email)
